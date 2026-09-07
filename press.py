@@ -10,7 +10,7 @@ from pypdf import PdfReader, PdfWriter
 import streamlit as st
 from streamlit_sortables import sort_items
 
-# Konfigurasi Halaman
+# --- KONFIGURASI HALAMAN ---
 st.set_page_config(
     page_title="PROJECT GABUT",
     page_icon="face.png" if os.path.exists("face.png") else "🗜️",
@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 
-# Fungsi membaca gambar lokal ke Base64
+# --- HELPER FUNCTIONS ---
 def get_image_base64(path):
   if os.path.exists(path):
     with open(path, "rb") as img_file:
@@ -27,8 +27,8 @@ def get_image_base64(path):
   return None
 
 
-# Fungsi merender thumbnail halaman pertama PDF menjadi gambar PIL
 def get_pdf_first_page_thumb(file_bytes):
+  """Membuat gambar thumbnail halaman pertama PDF untuk ruang kerja."""
   try:
     import pypdfium2 as pdfium
 
@@ -41,14 +41,87 @@ def get_pdf_first_page_thumb(file_bytes):
   return None
 
 
-# Muat aset logo
+def compress_pdf_engine(pdf_bytes):
+  """Mesin kompresi PDF ganda: Ghostscript (Cloud) + deduplikasi fallback pypdf."""
+  # 1. Metode Utama: Ghostscript (Merampingkan gambar & font duplikat)
+  gs_cmd = None
+  for cmd in ["gs", "gswin64c", "gswin32c"]:
+    if shutil.which(cmd):
+      gs_cmd = cmd
+      break
+
+  if gs_cmd:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f_in:
+      f_in.write(pdf_bytes)
+      in_path = f_in.name
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f_out:
+      out_path = f_out.name
+
+    try:
+      subprocess.run(
+          [
+              gs_cmd,
+              "-sDEVICE=pdfwrite",
+              "-dCompatibilityLevel=1.4",
+              "-dPDFSETTINGS=/ebook",  # 150 DPI: hemat drastis tanpa bikin teks buram
+              "-dNOPAUSE",
+              "-dQUIET",
+              "-dBatch",
+              f"-sOutputFile={out_path}",
+              in_path,
+          ],
+          check=True,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE,
+      )
+      with open(out_path, "rb") as f:
+        res_bytes = f.read()
+      if len(res_bytes) < len(pdf_bytes):
+        return res_bytes
+    except Exception:
+      pass
+    finally:
+      if os.path.exists(in_path):
+        os.remove(in_path)
+      if os.path.exists(out_path):
+        os.remove(out_path)
+
+  # 2. Metode Cadangan (Fallback jika Ghostscript belum terpasang)
+  reader = PdfReader(io.BytesIO(pdf_bytes))
+  writer = PdfWriter()
+
+  for page in reader.pages:
+    writer.add_page(page)
+
+  for page in writer.pages:
+    page.compress_content_streams()
+    try:
+      for img in page.images:
+        img.replace(img.image, quality=60)
+    except Exception:
+      pass
+
+  try:
+    writer.compress_identical_objects(
+        remove_identicals=True, remove_orphans=True
+    )
+  except Exception:
+    pass
+
+  writer.add_metadata({})
+  comp_buf = io.BytesIO()
+  writer.write(comp_buf)
+  return comp_buf.getvalue()
+
+
+# Muat aset branding
 face_base64 = get_image_base64("face.png")
 
-# State navigasi menu aktif
+# State menu navigasi
 if "active_menu" not in st.session_state:
   st.session_state.active_menu = "gambar"
 
-# --- SIDEBAR BRANDING & MENU NAVIGASI ---
+# --- SIDEBAR NAVIGASI & BRANDING ---
 with st.sidebar:
   icon_html = (
       f'<img src="data:image/png;base64,{face_base64}" style="width: 28px;'
@@ -73,7 +146,6 @@ with st.sidebar:
 
   st.caption("PILIH TOOLS:")
 
-  # Tombol 1: Kompres Gambar
   is_gambar = st.session_state.active_menu == "gambar"
   if st.button(
       "🖼️  Kompres Gambar",
@@ -83,7 +155,6 @@ with st.sidebar:
     st.session_state.active_menu = "gambar"
     st.rerun()
 
-  # Tombol 2: Kompres PDF
   is_pdf = st.session_state.active_menu == "pdf"
   if st.button(
       "📄  Kompres PDF",
@@ -93,7 +164,6 @@ with st.sidebar:
     st.session_state.active_menu = "pdf"
     st.rerun()
 
-  # Tombol 3: Gabung PDF (Merge)
   is_merge = st.session_state.active_menu == "merge_pdf"
   if st.button(
       "🧩  Gabung PDF (Merge)",
@@ -103,7 +173,6 @@ with st.sidebar:
     st.session_state.active_menu = "merge_pdf"
     st.rerun()
 
-  # Tombol 4: Word ke PDF
   is_word = st.session_state.active_menu == "word2pdf"
   if st.button(
       "📑  Word ke PDF",
@@ -121,7 +190,6 @@ with st.sidebar:
       unsafe_allow_html=True,
   )
 
-  # Watermark Creator
   st.markdown(
       """
     <div style="margin-top: 40px; padding-top: 15px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: center;">
@@ -198,13 +266,13 @@ if st.session_state.active_menu == "gambar":
 
 
 # =======================================================
-# 2. MODUL: KOMPRES PDF (SUDAH DIPERBAIKI)
+# 2. MODUL: KOMPRES PDF (DILENGKAPI GHOSTSCRIPT)
 # =======================================================
 elif st.session_state.active_menu == "pdf":
   st.title("📄 Kompres Berkas PDF")
   st.caption(
-      "Optimalkan aliran teks, bersihkan metadata berlebih, dan ringkas"
-      " struktur internal PDF."
+      "Optimalkan aliran teks, bersihkan metadata, dan padatkan gambar"
+      " internal PDF."
   )
 
   uploaded_pdf = st.file_uploader(
@@ -220,27 +288,12 @@ elif st.session_state.active_menu == "pdf":
     if st.button(
         "⚡ Mulai Kompresi PDF", type="primary", use_container_width=True
     ):
-      with st.spinner("Sedang memproses dokumen PDF..."):
+      with st.spinner("Sedang memproses dan mengompresi dokumen PDF..."):
         try:
-          reader = PdfReader(uploaded_pdf)
-          writer = PdfWriter()
-
-          # 1. Masukkan semua halaman dulu
-          for page in reader.pages:
-            writer.add_page(page)
-
-          # 2. Kompresi stream setelah halaman terdaftar di writer
-          for page in writer.pages:
-            page.compress_content_streams()
-
-          writer.add_metadata({})
-
-          buffer_pdf = io.BytesIO()
-          writer.write(buffer_pdf)
-          comp_bytes = buffer_pdf.tell()
-          comp_kb = round(comp_bytes / 1024, 2)
+          comp_bytes = compress_pdf_engine(uploaded_pdf.getvalue())
+          comp_kb = round(len(comp_bytes) / 1024, 2)
           savings = (
-              round((1 - (comp_bytes / orig_bytes)) * 100, 1)
+              round((1 - (len(comp_bytes) / orig_bytes)) * 100, 1)
               if orig_bytes > 0
               else 0
           )
@@ -252,7 +305,7 @@ elif st.session_state.active_menu == "pdf":
 
           st.download_button(
               label="⬇️ Unduh PDF Hasil Kompresi",
-              data=buffer_pdf.getvalue(),
+              data=comp_bytes,
               file_name=f"compressed_{uploaded_pdf.name}",
               mime="application/pdf",
               use_container_width=True,
@@ -262,7 +315,7 @@ elif st.session_state.active_menu == "pdf":
 
 
 # =======================================================
-# 3. MODUL: GABUNG PDF (MERGE WORKSPACE - SUDAH DIPERBAIKI)
+# 3. MODUL: GABUNG PDF (MERGE DENGAN DRAG & DROP HYBRID)
 # =======================================================
 elif st.session_state.active_menu == "merge_pdf":
   uploaded_pdfs = st.file_uploader(
@@ -278,7 +331,6 @@ elif st.session_state.active_menu == "merge_pdf":
     file_map = {f.name: f for f in uploaded_pdfs}
     file_names = [f.name for f in uploaded_pdfs]
 
-    # Inisialisasi cache thumbnail dokumen
     if "pdf_thumbnails" not in st.session_state:
       st.session_state.pdf_thumbnails = {}
 
@@ -298,13 +350,13 @@ elif st.session_state.active_menu == "merge_pdf":
           " urutan halaman dokumen:"
       )
 
-      # Area Drag & Drop Horizontal
+      # Ruang kerja drag-and-drop horizontal
       sorted_names = sort_items(file_names, direction="horizontal")
 
       st.write("")
       st.caption("Pratinjau Hasil Urutan Halaman:")
 
-      # Tampilkan kartu pratinjau A4 mengikuti urutan tarikan mouse
+      # Tampilan visual kartu A4 yang mengikuti hasil drag & drop
       num_cols = min(len(sorted_names), 4)
       cols = st.columns(num_cols)
 
@@ -334,13 +386,10 @@ elif st.session_state.active_menu == "merge_pdf":
                 unsafe_allow_html=True,
             )
 
-    # Panel Eksekusi Gabung
+    # Panel Eksekusi Gabung di Sisi Kanan
     with col_panel:
       st.markdown("## Merge PDF")
-      st.info(
-          "ℹ️ Dokumen pada urutan paling kiri akan menjadi halaman terdepan"
-          " pada berkas hasil gabungan."
-      )
+      st.info("ℹ️ Dokumen paling kiri akan menjadi halaman terdepan.")
 
       st.write("")
       if len(uploaded_pdfs) < 2:
@@ -367,7 +416,7 @@ elif st.session_state.active_menu == "merge_pdf":
             except Exception as e:
               st.error(f"Gagal menggabungkan: {e}")
 
-      # Opsi Tindakan Pasca-Merge
+      # Pilihan Download atau Kompres
       if (
           "merged_result" in st.session_state
           and st.session_state.merged_result
@@ -388,23 +437,9 @@ elif st.session_state.active_menu == "merge_pdf":
 
         st.write("")
         if st.button("🗜️ Kompres Hasil Ini", use_container_width=True):
-          with st.spinner("Memadatkan ukuran berkas gabungan..."):
+          with st.spinner("Mengompresi dan merampingkan dokumen gabungan..."):
             try:
-              reader = PdfReader(io.BytesIO(m_bytes))
-              compressor = PdfWriter()
-
-              # 1. Masukkan semua halaman dulu ke compressor
-              for p in reader.pages:
-                compressor.add_page(p)
-
-              # 2. Kompresi stream pada writer
-              for p in compressor.pages:
-                p.compress_content_streams()
-
-              compressor.add_metadata({})
-              comp_buf = io.BytesIO()
-              compressor.write(comp_buf)
-              st.session_state.compressed_result = comp_buf.getvalue()
+              st.session_state.compressed_result = compress_pdf_engine(m_bytes)
               st.rerun()
             except Exception as e:
               st.error(f"Gagal kompresi: {e}")
@@ -437,8 +472,8 @@ elif st.session_state.active_menu == "merge_pdf":
 elif st.session_state.active_menu == "word2pdf":
   st.title("📑 Ubah Dokumen Word ke PDF")
   st.caption(
-      "Konversi dokumen Microsoft Word (.docx) menjadi berkas PDF siap cetak"
-      " dengan tata letak yang tetap rapi."
+      "Konversi dokumen Microsoft Word (.docx) menjadi berkas PDF dengan tata"
+      " letak presisi."
   )
 
   uploaded_docx = st.file_uploader(
@@ -466,7 +501,7 @@ elif st.session_state.active_menu == "word2pdf":
 
             pdf_bytes = None
 
-            # 1. Cek ketersediaan LibreOffice (Streamlit Cloud / Linux)
+            # Cek LibreOffice di Linux/Streamlit Cloud
             libre_cmd = None
             for cmd in ["libreoffice", "soffice"]:
               if shutil.which(cmd):
@@ -492,7 +527,7 @@ elif st.session_state.active_menu == "word2pdf":
                 with open(output_pdf_path, "rb") as f:
                   pdf_bytes = f.read()
 
-            # 2. Cek ketersediaan di Windows lokal
+            # Fallback untuk Windows lokal jika memakai MS Word
             elif sys.platform == "win32":
               try:
                 import pythoncom
@@ -505,8 +540,8 @@ elif st.session_state.active_menu == "word2pdf":
                     pdf_bytes = f.read()
               except ImportError:
                 st.error(
-                    "Di Windows lokal butuh dependensi tambahan. Jalankan:"
-                    " `pip install docx2pdf pywin32`"
+                    "Di Windows lokal butuh dependensi: `pip install docx2pdf"
+                    " pywin32`"
                 )
 
             if pdf_bytes:
@@ -526,8 +561,8 @@ elif st.session_state.active_menu == "word2pdf":
               )
             else:
               st.error(
-                  "Engine konversi belum siap. Jika di Streamlit Cloud, pastikan"
-                  " berkas `packages.txt` sudah berisi `libreoffice`."
+                  "Engine konversi belum siap. Pastikan berkas `packages.txt`"
+                  " di repo sudah berisi `libreoffice`."
               )
 
         except Exception as e:
