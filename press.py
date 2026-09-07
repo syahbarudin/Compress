@@ -42,8 +42,8 @@ def get_pdf_first_page_thumb(file_bytes):
 
 
 def compress_pdf_engine(pdf_bytes):
-  """Mesin kompresi PDF ganda: Ghostscript (Cloud) + deduplikasi fallback pypdf."""
-  # 1. Metode Utama: Ghostscript (Merampingkan gambar & font duplikat)
+  """Mesin kompresi cepat tanpa bikin server hang/freeze."""
+  # 1. Jalur Utama: Ghostscript (Cepat & reduksi ukuran optimal)
   gs_cmd = None
   for cmd in ["gs", "gswin64c", "gswin32c"]:
     if shutil.which(cmd):
@@ -63,7 +63,7 @@ def compress_pdf_engine(pdf_bytes):
               gs_cmd,
               "-sDEVICE=pdfwrite",
               "-dCompatibilityLevel=1.4",
-              "-dPDFSETTINGS=/ebook",  # 150 DPI: hemat drastis tanpa bikin teks buram
+              "-dPDFSETTINGS=/ebook",
               "-dNOPAUSE",
               "-dQUIET",
               "-dBatch",
@@ -71,6 +71,7 @@ def compress_pdf_engine(pdf_bytes):
               in_path,
           ],
           check=True,
+          timeout=15,
           stdout=subprocess.PIPE,
           stderr=subprocess.PIPE,
       )
@@ -86,7 +87,7 @@ def compress_pdf_engine(pdf_bytes):
       if os.path.exists(out_path):
         os.remove(out_path)
 
-  # 2. Metode Cadangan (Fallback jika Ghostscript belum terpasang)
+  # 2. Jalur Fallback: Kompresi stream aman tanpa loop berat
   reader = PdfReader(io.BytesIO(pdf_bytes))
   writer = PdfWriter()
 
@@ -95,18 +96,6 @@ def compress_pdf_engine(pdf_bytes):
 
   for page in writer.pages:
     page.compress_content_streams()
-    try:
-      for img in page.images:
-        img.replace(img.image, quality=60)
-    except Exception:
-      pass
-
-  try:
-    writer.compress_identical_objects(
-        remove_identicals=True, remove_orphans=True
-    )
-  except Exception:
-    pass
 
   writer.add_metadata({})
   comp_buf = io.BytesIO()
@@ -190,6 +179,7 @@ with st.sidebar:
       unsafe_allow_html=True,
   )
 
+  # Watermark Creator
   st.markdown(
       """
     <div style="margin-top: 40px; padding-top: 15px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: center;">
@@ -266,13 +256,12 @@ if st.session_state.active_menu == "gambar":
 
 
 # =======================================================
-# 2. MODUL: KOMPRES PDF (DILENGKAPI GHOSTSCRIPT)
+# 2. MODUL: KOMPRES PDF
 # =======================================================
 elif st.session_state.active_menu == "pdf":
   st.title("📄 Kompres Berkas PDF")
   st.caption(
-      "Optimalkan aliran teks, bersihkan metadata, dan padatkan gambar"
-      " internal PDF."
+      "Optimalkan aliran teks, bersihkan metadata, dan padatkan berkas PDF."
   )
 
   uploaded_pdf = st.file_uploader(
@@ -315,7 +304,7 @@ elif st.session_state.active_menu == "pdf":
 
 
 # =======================================================
-# 3. MODUL: GABUNG PDF (MERGE DENGAN DRAG & DROP HYBRID)
+# 3. MODUL: GABUNG PDF (MERGE WORKSPACE HYBRID)
 # =======================================================
 elif st.session_state.active_menu == "merge_pdf":
   uploaded_pdfs = st.file_uploader(
@@ -356,7 +345,7 @@ elif st.session_state.active_menu == "merge_pdf":
       st.write("")
       st.caption("Pratinjau Hasil Urutan Halaman:")
 
-      # Tampilan visual kartu A4 yang mengikuti hasil drag & drop
+      # Tampilan visual kartu A4 mengikuti hasil drag & drop
       num_cols = min(len(sorted_names), 4)
       cols = st.columns(num_cols)
 
@@ -386,7 +375,7 @@ elif st.session_state.active_menu == "merge_pdf":
                 unsafe_allow_html=True,
             )
 
-    # Panel Eksekusi Gabung di Sisi Kanan
+    # Panel Eksekusi Gabung
     with col_panel:
       st.markdown("## Merge PDF")
       st.info("ℹ️ Dokumen paling kiri akan menjadi halaman terdepan.")
