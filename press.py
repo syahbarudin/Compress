@@ -8,6 +8,7 @@ import tempfile
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
+from streamlit_sortables import sort_items
 
 # Konfigurasi Halaman
 st.set_page_config(
@@ -18,7 +19,7 @@ st.set_page_config(
 )
 
 
-# Fungsi mengubah gambar lokal ke format Base64
+# Fungsi membaca gambar lokal ke Base64
 def get_image_base64(path):
   if os.path.exists(path):
     with open(path, "rb") as img_file:
@@ -26,7 +27,7 @@ def get_image_base64(path):
   return None
 
 
-# Fungsi membuat gambar thumbnail dari halaman pertama PDF
+# Fungsi merender thumbnail halaman pertama PDF menjadi gambar PIL
 def get_pdf_first_page_thumb(file_bytes):
   try:
     import pypdfium2 as pdfium
@@ -40,59 +41,14 @@ def get_pdf_first_page_thumb(file_bytes):
   return None
 
 
-# Muat file face.png
+# Muat aset logo
 face_base64 = get_image_base64("face.png")
 
-# Simpan state menu aktif
+# State navigasi menu aktif
 if "active_menu" not in st.session_state:
   st.session_state.active_menu = "gambar"
 
-# Injeksi CSS Khusus Kartu Preview ala iLovePDF
-st.markdown(
-    """
-<style>
-  /* Styling kartu dokumen PDF */
-  .pdf-card {
-    background-color: #ffffff;
-    border-radius: 8px;
-    padding: 12px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 8px;
-    min-height: 230px;
-  }
-  .pdf-card-thumb {
-    max-height: 180px;
-    object-fit: contain;
-    border-radius: 4px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  }
-  .pdf-filename {
-    font-size: 13px;
-    font-weight: 700;
-    color: #111111;
-    text-align: center;
-    margin-top: 10px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-  .action-panel {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 24px;
-  }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# --- SIDEBAR BRANDING & MENU TOMBOL ---
+# --- SIDEBAR BRANDING & MENU NAVIGASI ---
 with st.sidebar:
   icon_html = (
       f'<img src="data:image/png;base64,{face_base64}" style="width: 28px;'
@@ -117,6 +73,7 @@ with st.sidebar:
 
   st.caption("PILIH TOOLS:")
 
+  # Tombol 1: Kompres Gambar
   is_gambar = st.session_state.active_menu == "gambar"
   if st.button(
       "🖼️  Kompres Gambar",
@@ -126,6 +83,7 @@ with st.sidebar:
     st.session_state.active_menu = "gambar"
     st.rerun()
 
+  # Tombol 2: Kompres PDF
   is_pdf = st.session_state.active_menu == "pdf"
   if st.button(
       "📄  Kompres PDF",
@@ -135,6 +93,7 @@ with st.sidebar:
     st.session_state.active_menu = "pdf"
     st.rerun()
 
+  # Tombol 3: Gabung PDF (Merge)
   is_merge = st.session_state.active_menu == "merge_pdf"
   if st.button(
       "🧩  Gabung PDF (Merge)",
@@ -144,6 +103,7 @@ with st.sidebar:
     st.session_state.active_menu = "merge_pdf"
     st.rerun()
 
+  # Tombol 4: Word ke PDF
   is_word = st.session_state.active_menu == "word2pdf"
   if st.button(
       "📑  Word ke PDF",
@@ -161,6 +121,7 @@ with st.sidebar:
       unsafe_allow_html=True,
   )
 
+  # Watermark Creator
   st.markdown(
       """
     <div style="margin-top: 40px; padding-top: 15px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: center;">
@@ -297,7 +258,7 @@ elif st.session_state.active_menu == "pdf":
 
 
 # =======================================================
-# 3. MODUL: GABUNG PDF (MERGE WORKSPACE ALA ILOVEPDF)
+# 3. MODUL: GABUNG PDF (MERGE WORKSPACE HYBRID)
 # =======================================================
 elif st.session_state.active_menu == "merge_pdf":
   uploaded_pdfs = st.file_uploader(
@@ -310,118 +271,77 @@ elif st.session_state.active_menu == "merge_pdf":
   if not uploaded_pdfs:
     st.info("Unggah 2 atau lebih berkas PDF untuk mulai menyusun urutan.")
   else:
-    current_ids = [f"{f.name}_{f.size}" for f in uploaded_pdfs]
+    file_map = {f.name: f for f in uploaded_pdfs}
+    file_names = [f.name for f in uploaded_pdfs]
 
-    if (
-        "pdf_order_ids" not in st.session_state
-        or set(st.session_state.pdf_order_ids) != set(current_ids)
-        or len(st.session_state.pdf_order_ids) != len(current_ids)
-    ):
-      st.session_state.pdf_order_ids = current_ids
-
-    file_map = {f"{f.name}_{f.size}": f for f in uploaded_pdfs}
-
-    # Caching thumbnail halaman pertama agar loading instan saat digeser
+    # Inisialisasi cache thumbnail dokumen
     if "pdf_thumbnails" not in st.session_state:
       st.session_state.pdf_thumbnails = {}
 
-    for f_id, f_obj in file_map.items():
-      if f_id not in st.session_state.pdf_thumbnails:
+    for name, f_obj in file_map.items():
+      if name not in st.session_state.pdf_thumbnails:
         f_obj.seek(0)
         thumb = get_pdf_first_page_thumb(f_obj.getvalue())
-        st.session_state.pdf_thumbnails[f_id] = thumb
+        st.session_state.pdf_thumbnails[name] = thumb
 
     st.write("---")
-
-    # Layout ala iLovePDF: Kiri Workspace Kartu, Kanan Action Panel
     col_workspace, col_panel = st.columns([3.2, 1.1], gap="large")
 
     with col_workspace:
+      st.write("### 🛠️ Atur Urutan Berkas")
       st.caption(
-          "Gunakan tombol **◀** dan **▶** di bawah tiap kartu untuk mengubah"
-          " urutan halaman dokumen."
+          "Klik, tahan, lalu geser nama berkas di bawah ini untuk mengatur"
+          " urutan halaman dokumen:"
       )
 
-      # Tampilkan kartu-kartu secara horizontal (grid)
-      order_ids = st.session_state.pdf_order_ids
-      total_files = len(order_ids)
+      # Area Drag & Drop Horizontal
+      sorted_names = sort_items(file_names, direction="horizontal")
 
-      # Buat kolom grid dinamis (maksimal 4 per baris)
-      num_cols = min(total_files, 4)
+      st.write("")
+      st.caption("Pratinjau Hasil Urutan Halaman:")
+
+      # Tampilkan kartu pratinjau A4 mengikuti urutan tarikan mouse
+      num_cols = min(len(sorted_names), 4)
       cols = st.columns(num_cols)
 
-      for idx, f_id in enumerate(order_ids):
-        file_obj = file_map[f_id]
-        thumb_img = st.session_state.pdf_thumbnails.get(f_id)
+      for idx, name in enumerate(sorted_names):
+        thumb_img = st.session_state.pdf_thumbnails.get(name)
         target_col = cols[idx % num_cols]
 
         with target_col:
-          # Kartu Putih Thumbnail
           with st.container(border=True):
             if thumb_img:
               st.image(thumb_img, use_container_width=True)
             else:
               st.markdown(
-                  "<div style='text-align:center; font-size:60px; padding:20px"
-                  " 0;'>📄</div>",
+                  "<div style='text-align:center; font-size:50px;'>📄</div>",
                   unsafe_allow_html=True,
               )
 
             st.markdown(
-                f"<div style='text-align:center; font-weight:700; font-size:13px;"
+                f"<div style='text-align:center; font-weight:700; font-size:12px;"
                 f" white-space:nowrap; overflow:hidden;"
-                f" text-overflow:ellipsis;'>{file_obj.name}</div>",
+                f" text-overflow:ellipsis;'>{name}</div>",
                 unsafe_allow_html=True,
             )
-
-          # Tombol Geser Posisi Urutan
-          c_left, c_num, c_right = st.columns([1, 1, 1])
-          with c_left:
-            if st.button(
-                "◀",
-                key=f"left_{f_id}_{idx}",
-                disabled=(idx == 0),
-                use_container_width=True,
-            ):
-              order_ids[idx], order_ids[idx - 1] = (
-                  order_ids[idx - 1],
-                  order_ids[idx],
-              )
-              st.rerun()
-
-          with c_num:
             st.markdown(
-                f"<div style='text-align:center; font-weight:bold; color:gray;"
-                f" padding-top:6px;'>#{idx + 1}</div>",
+                f"<div style='text-align:center; color:#e5322d; font-size:11px;"
+                f" font-weight:bold;'>Urutan #{idx + 1}</div>",
                 unsafe_allow_html=True,
             )
 
-          with c_right:
-            if st.button(
-                "▶",
-                key=f"right_{f_id}_{idx}",
-                disabled=(idx == total_files - 1),
-                use_container_width=True,
-            ):
-              order_ids[idx], order_ids[idx + 1] = (
-                  order_ids[idx + 1],
-                  order_ids[idx],
-              )
-              st.rerun()
-
-    # Panel Aksi Kanan (Persis Box Sidebar iLovePDF)
+    # Panel Eksekusi Gabung
     with col_panel:
       st.markdown("## Merge PDF")
       st.info(
-          "ℹ️ Urutan dokumen paling kiri akan diletakkan di halaman pertama"
-          " hasil gabungan."
+          "ℹ️ Dokumen pada urutan paling kiri akan menjadi halaman terdepan"
+          " pada berkas hasil gabungan."
       )
 
       st.write("")
       if len(uploaded_pdfs) < 2:
         st.warning("Pilih minimal 2 dokumen.")
       else:
-        # Tombol Merah Eksekusi
         if st.button(
             "Merge PDF ➔",
             type="primary",
@@ -431,8 +351,8 @@ elif st.session_state.active_menu == "merge_pdf":
           with st.spinner("Menggabungkan seluruh PDF..."):
             try:
               merger = PdfWriter()
-              for f_id in order_ids:
-                f_obj = file_map[f_id]
+              for name in sorted_names:
+                f_obj = file_map[name]
                 f_obj.seek(0)
                 merger.append(f_obj)
 
@@ -443,7 +363,7 @@ elif st.session_state.active_menu == "merge_pdf":
             except Exception as e:
               st.error(f"Gagal menggabungkan: {e}")
 
-      # Tombol Pasca-Merge (Download & Compress)
+      # Opsi Tindakan Pasca-Merge
       if (
           "merged_result" in st.session_state
           and st.session_state.merged_result
@@ -451,7 +371,7 @@ elif st.session_state.active_menu == "merge_pdf":
         m_bytes = st.session_state.merged_result
         m_kb = round(len(m_bytes) / 1024, 2)
 
-        st.success(f"🎉 Siap diunduh! ({m_kb} KB)")
+        st.success(f"🎉 Dokumen siap! ({m_kb} KB)")
 
         st.download_button(
             label=f"⬇️ Unduh PDF ({m_kb} KB)",
@@ -464,7 +384,7 @@ elif st.session_state.active_menu == "merge_pdf":
 
         st.write("")
         if st.button("🗜️ Kompres Hasil Ini", use_container_width=True):
-          with st.spinner("Memadatkan ukuran file gabungan..."):
+          with st.spinner("Memadatkan ukuran berkas gabungan..."):
             try:
               reader = PdfReader(io.BytesIO(m_bytes))
               compressor = PdfWriter()
@@ -490,7 +410,7 @@ elif st.session_state.active_menu == "merge_pdf":
               else 0
           )
 
-          st.caption(f"Hemat **{max(0, savings)}%** (Hasil: {c_kb} KB)")
+          st.caption(f"Hemat **{max(0, savings)}%** (Ukuran: {c_kb} KB)")
           st.download_button(
               label=f"⬇️ Unduh PDF Terkompresi ({c_kb} KB)",
               data=c_bytes,
@@ -535,6 +455,7 @@ elif st.session_state.active_menu == "word2pdf":
 
             pdf_bytes = None
 
+            # 1. Cek ketersediaan LibreOffice (Streamlit Cloud / Linux)
             libre_cmd = None
             for cmd in ["libreoffice", "soffice"]:
               if shutil.which(cmd):
@@ -560,6 +481,7 @@ elif st.session_state.active_menu == "word2pdf":
                 with open(output_pdf_path, "rb") as f:
                   pdf_bytes = f.read()
 
+            # 2. Cek ketersediaan di Windows lokal
             elif sys.platform == "win32":
               try:
                 import pythoncom
@@ -572,14 +494,14 @@ elif st.session_state.active_menu == "word2pdf":
                     pdf_bytes = f.read()
               except ImportError:
                 st.error(
-                    "Di Windows butuh pustaka pendukung. Jalankan: `pip"
-                    " install docx2pdf pywin32`"
+                    "Di Windows lokal butuh dependensi tambahan. Jalankan:"
+                    " `pip install docx2pdf pywin32`"
                 )
 
             if pdf_bytes:
               pdf_kb = round(len(pdf_bytes) / 1024, 2)
               st.success(
-                  f"🎉 Berhasil diubah ke PDF! Ukuran berkas hasil:"
+                  f"🎉 Berhasil diubah ke PDF! Ukuran berkas:"
                   f" **{pdf_kb} KB**"
               )
 
@@ -594,7 +516,7 @@ elif st.session_state.active_menu == "word2pdf":
             else:
               st.error(
                   "Engine konversi belum siap. Jika di Streamlit Cloud, pastikan"
-                  " file `packages.txt` sudah berisi `libreoffice`."
+                  " berkas `packages.txt` sudah berisi `libreoffice`."
               )
 
         except Exception as e:
