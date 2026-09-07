@@ -4,7 +4,6 @@ from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
 
-# Konfigurasi Halaman
 st.set_page_config(
     page_title="PROJECT GABUT",
     page_icon="🗜️",
@@ -12,9 +11,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- SIDEBAR BRANDING & NAVIGASI ---
+# Simpan state menu aktif
+if "active_menu" not in st.session_state:
+  st.session_state.active_menu = "gambar"
+
+# --- SIDEBAR BRANDING & MENU TOMBOL (BEBAS BULETAN) ---
 with st.sidebar:
-  # Logo Brand ala iLovePDF
   st.markdown(
       """
     <div style="margin-bottom: 20px;">
@@ -27,27 +29,51 @@ with st.sidebar:
       unsafe_allow_html=True,
   )
 
-  menu = st.radio(
-      "PILIH TOOLS:",
-      [
-          "🖼️ Kompres Gambar",
-          "📄 Kompres PDF",
-          "📝 Kompres Dokumen Word",
-      ],
-  )
+  st.caption("PILIH TOOLS:")
+
+  # Tombol 1: Kompres Gambar
+  is_gambar = st.session_state.active_menu == "gambar"
+  if st.button(
+      "🖼️  Kompres Gambar",
+      use_container_width=True,
+      type="primary" if is_gambar else "secondary",
+  ):
+    st.session_state.active_menu = "gambar"
+    st.rerun()
+
+  # Tombol 2: Kompres PDF
+  is_pdf = st.session_state.active_menu == "pdf"
+  if st.button(
+      "📄  Kompres PDF",
+      use_container_width=True,
+      type="primary" if is_pdf else "secondary",
+  ):
+    st.session_state.active_menu = "pdf"
+    st.rerun()
+
+  # Tombol 3: Kompres Dokumen Word
+  is_word = st.session_state.active_menu == "word"
+  if st.button(
+      "📝  Kompres Dokumen Word",
+      use_container_width=True,
+      type="primary" if is_word else "secondary",
+  ):
+    st.session_state.active_menu = "word"
+    st.rerun()
 
   st.divider()
   st.markdown(
       "🔒 **100% Aman & Privat**<br>"
-      "<small style='color: gray;'>Semua berkas diproses langsung di RAM tanpa disimpan ke harddisk server.</small>",
+      "<small style='color: gray;'>Semua berkas diproses langsung di RAM tanpa"
+      " disimpan ke harddisk server.</small>",
       unsafe_allow_html=True,
   )
 
 
 # =======================================================
-# 1. MENU: KOMPRES GAMBAR
+# 1. MODUL: KOMPRES GAMBAR
 # =======================================================
-if menu == "🖼️ Kompres Gambar":
+if st.session_state.active_menu == "gambar":
   st.title("🖼️ Kompres Gambar")
   st.caption(
       "Kecilkan ukuran file JPG, PNG, atau WEBP dengan pratinjau langsung."
@@ -72,7 +98,6 @@ if menu == "🖼️ Kompres Gambar":
         help="Semakin kecil nilai slider, semakin kecil ukuran file akhirnya.",
     )
 
-    # Proses kompresi gambar di RAM
     img = Image.open(uploaded_image)
     if img.mode in ("RGBA", "P"):
       img = img.convert("RGB")
@@ -87,7 +112,6 @@ if menu == "🖼️ Kompres Gambar":
         else 0
     )
 
-    # Preview Komparasi 2 Kolom
     col1, col2 = st.columns(2)
     with col1:
       st.subheader("Gambar Asli")
@@ -111,9 +135,9 @@ if menu == "🖼️ Kompres Gambar":
 
 
 # =======================================================
-# 2. MENU: KOMPRES PDF
+# 2. MODUL: KOMPRES PDF
 # =======================================================
-elif menu == "📄 Kompres PDF":
+elif st.session_state.active_menu == "pdf":
   st.title("📄 Kompres Berkas PDF")
   st.caption(
       "Optimalkan aliran teks, bersihkan metadata berlebih, dan ringkas"
@@ -171,9 +195,9 @@ elif menu == "📄 Kompres PDF":
 
 
 # =======================================================
-# 3. MENU: KOMPRES DOKUMEN WORD (.DOCX)
+# 3. MODUL: KOMPRES DOKUMEN WORD (.DOCX)
 # =======================================================
-elif menu == "📝 Kompres Dokumen Word":
+elif st.session_state.active_menu == "word":
   st.title("📝 Kompres Dokumen Word (.docx)")
   st.caption(
       "Mengekstrak file Word, mengompresi gambar internal yang bikin ukuran"
@@ -216,7 +240,6 @@ elif menu == "📝 Kompres Dokumen Word":
           for item in in_zip.infolist():
             content = in_zip.read(item.filename)
 
-            # Jika target adalah gambar di dalam Word
             if item.filename.startswith("word/media/"):
               try:
                 img = Image.open(io.BytesIO(content))
@@ -268,3 +291,4 @@ elif menu == "📝 Kompres Dokumen Word":
           )
         except Exception as e:
           st.error(f"Gagal memproses dokumen Word: {e}")
+            
