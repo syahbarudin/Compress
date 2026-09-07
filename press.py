@@ -21,7 +21,7 @@ with st.sidebar:
       """
     <div style="margin-bottom: 20px;">
       <span style="font-size: 26px; font-weight: 900; letter-spacing: -0.5px;">PROJECT</span>
-      <span style="font-size: 24px; color: #e5322d; margin: 0 2px;">❤️</span>
+      <span style="font-size: 24px; color: #e5322d; margin: 0 2px;">"face.png"</span>
       <span style="font-size: 26px; font-weight: 900; letter-spacing: -0.5px;">GABUT</span>
       <p style="color: gray; font-size: 12px; margin-top: 2px;">Multi-Format Compression Tools</p>
     </div>
