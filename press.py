@@ -68,7 +68,16 @@ with st.sidebar:
       " disimpan ke harddisk server.</small>",
       unsafe_allow_html=True,
   )
-
+# --- WATERMARK KREDIT CREATOR ---
+  st.markdown(
+      """
+    <div style="margin-top: 40px; padding-top: 15px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: center;">
+      <p style="font-size: 11px; color: #888; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Project created by</p>
+      <p style="font-size: 13px; font-weight: 700; color: #f1f1f1; margin: 0;">Syahbarudin Abdillah</p>
+    </div>
+    """,
+      unsafe_allow_html=True,
+  )
 
 # =======================================================
 # 1. MODUL: KOMPRES GAMBAR
