@@ -9,6 +9,14 @@ from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
 
+# Konfigurasi Halaman
+st.set_page_config(
+    page_title="PROJECT GABUT",
+    page_icon="face.png" if os.path.exists("face.png") else "🗜️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 
 # Fungsi mengubah gambar lokal ke format Base64
 def get_image_base64(path):
@@ -18,19 +26,71 @@ def get_image_base64(path):
   return None
 
 
+# Fungsi membuat gambar thumbnail dari halaman pertama PDF
+def get_pdf_first_page_thumb(file_bytes):
+  try:
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(file_bytes)
+    if len(pdf) > 0:
+      page = pdf[0]
+      return page.render(scale=1.5).to_pil()
+  except Exception:
+    pass
+  return None
+
+
 # Muat file face.png
 face_base64 = get_image_base64("face.png")
-
-st.set_page_config(
-    page_title="PROJECT GABUT",
-    page_icon="face.png" if os.path.exists("face.png") else "🗜️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # Simpan state menu aktif
 if "active_menu" not in st.session_state:
   st.session_state.active_menu = "gambar"
+
+# Injeksi CSS Khusus Kartu Preview ala iLovePDF
+st.markdown(
+    """
+<style>
+  /* Styling kartu dokumen PDF */
+  .pdf-card {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    min-height: 230px;
+  }
+  .pdf-card-thumb {
+    max-height: 180px;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  .pdf-filename {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111111;
+    text-align: center;
+    margin-top: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .action-panel {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 24px;
+  }
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 # --- SIDEBAR BRANDING & MENU TOMBOL ---
 with st.sidebar:
@@ -57,7 +117,6 @@ with st.sidebar:
 
   st.caption("PILIH TOOLS:")
 
-  # Tombol 1: Kompres Gambar
   is_gambar = st.session_state.active_menu == "gambar"
   if st.button(
       "🖼️  Kompres Gambar",
@@ -67,7 +126,6 @@ with st.sidebar:
     st.session_state.active_menu = "gambar"
     st.rerun()
 
-  # Tombol 2: Kompres PDF
   is_pdf = st.session_state.active_menu == "pdf"
   if st.button(
       "📄  Kompres PDF",
@@ -77,7 +135,6 @@ with st.sidebar:
     st.session_state.active_menu = "pdf"
     st.rerun()
 
-  # Tombol 3: Gabung PDF (Baru)
   is_merge = st.session_state.active_menu == "merge_pdf"
   if st.button(
       "🧩  Gabung PDF (Merge)",
@@ -87,7 +144,6 @@ with st.sidebar:
     st.session_state.active_menu = "merge_pdf"
     st.rerun()
 
-  # Tombol 4: Word ke PDF
   is_word = st.session_state.active_menu == "word2pdf"
   if st.button(
       "📑  Word ke PDF",
@@ -105,7 +161,6 @@ with st.sidebar:
       unsafe_allow_html=True,
   )
 
-  # Watermark Creator
   st.markdown(
       """
     <div style="margin-top: 40px; padding-top: 15px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: center;">
@@ -242,24 +297,19 @@ elif st.session_state.active_menu == "pdf":
 
 
 # =======================================================
-# 3. MODUL: GABUNG PDF (MERGE WORKSPACE)
+# 3. MODUL: GABUNG PDF (MERGE WORKSPACE ALA ILOVEPDF)
 # =======================================================
 elif st.session_state.active_menu == "merge_pdf":
-  st.title("🧩 Gabungkan Berkas PDF")
-  st.caption(
-      "Unggah beberapa dokumen PDF, atur urutan halaman sesuai keinginan pada"
-      " workspace, lalu gabungkan."
-  )
-
   uploaded_pdfs = st.file_uploader(
-      "Pilih 2 atau lebih berkas PDF:",
+      "Pilih berkas PDF:",
       type=["pdf"],
       accept_multiple_files=True,
       key="merge_file_uploader",
   )
 
-  if uploaded_pdfs:
-    # Inisialisasi atau sinkronisasi urutan indeks file
+  if not uploaded_pdfs:
+    st.info("Unggah 2 atau lebih berkas PDF untuk mulai menyusun urutan.")
+  else:
     current_ids = [f"{f.name}_{f.size}" for f in uploaded_pdfs]
 
     if (
@@ -271,134 +321,183 @@ elif st.session_state.active_menu == "merge_pdf":
 
     file_map = {f"{f.name}_{f.size}": f for f in uploaded_pdfs}
 
+    # Caching thumbnail halaman pertama agar loading instan saat digeser
+    if "pdf_thumbnails" not in st.session_state:
+      st.session_state.pdf_thumbnails = {}
+
+    for f_id, f_obj in file_map.items():
+      if f_id not in st.session_state.pdf_thumbnails:
+        f_obj.seek(0)
+        thumb = get_pdf_first_page_thumb(f_obj.getvalue())
+        st.session_state.pdf_thumbnails[f_id] = thumb
+
     st.write("---")
-    st.subheader("🛠️ Ruang Kerja (Atur Urutan Dokumen)")
-    st.caption("Urutan teratas akan menjadi halaman paling depan pada PDF gabungan.")
 
-    # Tampilkan kartu urutan file dengan tombol geser
-    for idx, f_id in enumerate(st.session_state.pdf_order_ids):
-      file_obj = file_map[f_id]
-      size_kb = round(file_obj.size / 1024, 1)
+    # Layout ala iLovePDF: Kiri Workspace Kartu, Kanan Action Panel
+    col_workspace, col_panel = st.columns([3.2, 1.1], gap="large")
 
-      col_info, col_up, col_down = st.columns([5, 1, 1], vertical_alignment="center")
+    with col_workspace:
+      st.caption(
+          "Gunakan tombol **◀** dan **▶** di bawah tiap kartu untuk mengubah"
+          " urutan halaman dokumen."
+      )
 
-      with col_info:
-        st.markdown(
-            f"""
-            <div style="background-color: rgba(255, 255, 255, 0.05); padding: 10px 15px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <b>#{idx + 1}</b> 📄 {file_obj.name} <span style="color: gray; font-size: 12px; margin-left: 10px;">({size_kb} KB)</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+      # Tampilkan kartu-kartu secara horizontal (grid)
+      order_ids = st.session_state.pdf_order_ids
+      total_files = len(order_ids)
 
-      with col_up:
-        if st.button("⬆️ Naik", key=f"up_{f_id}", disabled=(idx == 0), use_container_width=True):
-          order = st.session_state.pdf_order_ids
-          order[idx], order[idx - 1] = order[idx - 1], order[idx]
-          st.rerun()
+      # Buat kolom grid dinamis (maksimal 4 per baris)
+      num_cols = min(total_files, 4)
+      cols = st.columns(num_cols)
 
-      with col_down:
+      for idx, f_id in enumerate(order_ids):
+        file_obj = file_map[f_id]
+        thumb_img = st.session_state.pdf_thumbnails.get(f_id)
+        target_col = cols[idx % num_cols]
+
+        with target_col:
+          # Kartu Putih Thumbnail
+          with st.container(border=True):
+            if thumb_img:
+              st.image(thumb_img, use_container_width=True)
+            else:
+              st.markdown(
+                  "<div style='text-align:center; font-size:60px; padding:20px"
+                  " 0;'>📄</div>",
+                  unsafe_allow_html=True,
+              )
+
+            st.markdown(
+                f"<div style='text-align:center; font-weight:700; font-size:13px;"
+                f" white-space:nowrap; overflow:hidden;"
+                f" text-overflow:ellipsis;'>{file_obj.name}</div>",
+                unsafe_allow_html=True,
+            )
+
+          # Tombol Geser Posisi Urutan
+          c_left, c_num, c_right = st.columns([1, 1, 1])
+          with c_left:
+            if st.button(
+                "◀",
+                key=f"left_{f_id}_{idx}",
+                disabled=(idx == 0),
+                use_container_width=True,
+            ):
+              order_ids[idx], order_ids[idx - 1] = (
+                  order_ids[idx - 1],
+                  order_ids[idx],
+              )
+              st.rerun()
+
+          with c_num:
+            st.markdown(
+                f"<div style='text-align:center; font-weight:bold; color:gray;"
+                f" padding-top:6px;'>#{idx + 1}</div>",
+                unsafe_allow_html=True,
+            )
+
+          with c_right:
+            if st.button(
+                "▶",
+                key=f"right_{f_id}_{idx}",
+                disabled=(idx == total_files - 1),
+                use_container_width=True,
+            ):
+              order_ids[idx], order_ids[idx + 1] = (
+                  order_ids[idx + 1],
+                  order_ids[idx],
+              )
+              st.rerun()
+
+    # Panel Aksi Kanan (Persis Box Sidebar iLovePDF)
+    with col_panel:
+      st.markdown("## Merge PDF")
+      st.info(
+          "ℹ️ Urutan dokumen paling kiri akan diletakkan di halaman pertama"
+          " hasil gabungan."
+      )
+
+      st.write("")
+      if len(uploaded_pdfs) < 2:
+        st.warning("Pilih minimal 2 dokumen.")
+      else:
+        # Tombol Merah Eksekusi
         if st.button(
-            "⬇️ Turun",
-            key=f"down_{f_id}",
-            disabled=(idx == len(st.session_state.pdf_order_ids) - 1),
+            "Merge PDF ➔",
+            type="primary",
             use_container_width=True,
+            key="btn_do_merge",
         ):
-          order = st.session_state.pdf_order_ids
-          order[idx], order[idx + 1] = order[idx + 1], order[idx]
-          st.rerun()
+          with st.spinner("Menggabungkan seluruh PDF..."):
+            try:
+              merger = PdfWriter()
+              for f_id in order_ids:
+                f_obj = file_map[f_id]
+                f_obj.seek(0)
+                merger.append(f_obj)
 
-    st.write("")
+              out_buf = io.BytesIO()
+              merger.write(out_buf)
+              st.session_state.merged_result = out_buf.getvalue()
+              st.session_state.compressed_result = None
+            except Exception as e:
+              st.error(f"Gagal menggabungkan: {e}")
 
-    # Tombol Eksekusi Penggabungan
-    if len(uploaded_pdfs) < 2:
-      st.info("💡 Unggah minimal 2 berkas PDF untuk mengaktifkan tombol gabung.")
-    else:
-      if st.button("⚡ Gabungkan PDF Sekarang", type="primary", use_container_width=True):
-        with st.spinner("Menggabungkan seluruh dokumen sesuai urutan..."):
-          try:
-            merger = PdfWriter()
-            total_orig_bytes = 0
+      # Tombol Pasca-Merge (Download & Compress)
+      if (
+          "merged_result" in st.session_state
+          and st.session_state.merged_result
+      ):
+        m_bytes = st.session_state.merged_result
+        m_kb = round(len(m_bytes) / 1024, 2)
 
-            for f_id in st.session_state.pdf_order_ids:
-              file_obj = file_map[f_id]
-              total_orig_bytes += file_obj.size
-              file_obj.seek(0)
-              merger.append(file_obj)
+        st.success(f"🎉 Siap diunduh! ({m_kb} KB)")
 
-            merged_buffer = io.BytesIO()
-            merger.write(merged_buffer)
-            st.session_state.merged_result = merged_buffer.getvalue()
-            st.session_state.merged_orig_size = total_orig_bytes
-            st.session_state.compressed_result = None  # Reset kompresi jika ada merge baru
-
-          except Exception as e:
-            st.error(f"Gagal menggabungkan PDF: {e}")
-
-    # Area Hasil & Pilihan Tindakan (Download vs Compress)
-    if "merged_result" in st.session_state and st.session_state.merged_result:
-      merged_bytes = st.session_state.merged_result
-      merged_kb = round(len(merged_bytes) / 1024, 2)
-
-      st.success(f"🎉 Dokumen berhasil digabungkan! Ukuran total: **{merged_kb} KB**")
-      st.write("### Pilih Langkah Selanjutnya:")
-
-      col_act1, col_act2 = st.columns(2)
-
-      with col_act1:
         st.download_button(
-            label=f"⬇️ Unduh PDF Gabungan ({merged_kb} KB)",
-            data=merged_bytes,
+            label=f"⬇️ Unduh PDF ({m_kb} KB)",
+            data=m_bytes,
             file_name="merged_document.pdf",
             mime="application/pdf",
             type="primary",
             use_container_width=True,
         )
 
-      with col_act2:
-        if st.button("🗜️ Kompres Hasil Gabungan", use_container_width=True):
-          with st.spinner("Sedang memadatkan hasil PDF gabungan..."):
+        st.write("")
+        if st.button("🗜️ Kompres Hasil Ini", use_container_width=True):
+          with st.spinner("Memadatkan ukuran file gabungan..."):
             try:
-              reader = PdfReader(io.BytesIO(merged_bytes))
+              reader = PdfReader(io.BytesIO(m_bytes))
               compressor = PdfWriter()
-
-              for page in reader.pages:
-                page.compress_content_streams()
-                compressor.add_page(page)
-
+              for p in reader.pages:
+                p.compress_content_streams()
+                compressor.add_page(p)
               compressor.add_metadata({})
-              comp_buffer = io.BytesIO()
-              compressor.write(comp_buffer)
-              st.session_state.compressed_result = comp_buffer.getvalue()
-
+              comp_buf = io.BytesIO()
+              compressor.write(comp_buf)
+              st.session_state.compressed_result = comp_buf.getvalue()
             except Exception as e:
-              st.error(f"Gagal mengompresi hasil PDF: {e}")
+              st.error(f"Gagal kompresi: {e}")
 
-      # Tampilkan tombol download kompresi jika sudah diproses
-      if (
-          "compressed_result" in st.session_state
-          and st.session_state.compressed_result
-      ):
-        comp_bytes = st.session_state.compressed_result
-        comp_kb = round(len(comp_bytes) / 1024, 2)
-        savings = (
-            round((1 - (len(comp_bytes) / len(merged_bytes))) * 100, 1)
-            if len(merged_bytes) > 0
-            else 0
-        )
+        if (
+            "compressed_result" in st.session_state
+            and st.session_state.compressed_result
+        ):
+          c_bytes = st.session_state.compressed_result
+          c_kb = round(len(c_bytes) / 1024, 2)
+          savings = (
+              round((1 - (len(c_bytes) / len(m_bytes))) * 100, 1)
+              if len(m_bytes) > 0
+              else 0
+          )
 
-        st.info(
-            f"📦 Kompresi tuntas! Ukuran hemat **{max(0, savings)}%** (dari"
-            f" {merged_kb} KB ➔ **{comp_kb} KB**)"
-        )
-        st.download_button(
-            label=f"⬇️ Unduh PDF Terkompresi ({comp_kb} KB)",
-            data=comp_bytes,
-            file_name="merged_compressed_document.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+          st.caption(f"Hemat **{max(0, savings)}%** (Hasil: {c_kb} KB)")
+          st.download_button(
+              label=f"⬇️ Unduh PDF Terkompresi ({c_kb} KB)",
+              data=c_bytes,
+              file_name="merged_compressed.pdf",
+              mime="application/pdf",
+              use_container_width=True,
+          )
 
 
 # =======================================================
@@ -473,8 +572,8 @@ elif st.session_state.active_menu == "word2pdf":
                     pdf_bytes = f.read()
               except ImportError:
                 st.error(
-                    "Di Windows lokal butuh pustaka pendukung. Jalankan di"
-                    " terminal: `pip install docx2pdf pywin32`"
+                    "Di Windows butuh pustaka pendukung. Jalankan: `pip"
+                    " install docx2pdf pywin32`"
                 )
 
             if pdf_bytes:
