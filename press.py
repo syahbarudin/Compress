@@ -198,7 +198,7 @@ if st.session_state.active_menu == "gambar":
 
 
 # =======================================================
-# 2. MODUL: KOMPRES PDF
+# 2. MODUL: KOMPRES PDF (SUDAH DIPERBAIKI)
 # =======================================================
 elif st.session_state.active_menu == "pdf":
   st.title("📄 Kompres Berkas PDF")
@@ -225,9 +225,13 @@ elif st.session_state.active_menu == "pdf":
           reader = PdfReader(uploaded_pdf)
           writer = PdfWriter()
 
+          # 1. Masukkan semua halaman dulu
           for page in reader.pages:
-            page.compress_content_streams()
             writer.add_page(page)
+
+          # 2. Kompresi stream setelah halaman terdaftar di writer
+          for page in writer.pages:
+            page.compress_content_streams()
 
           writer.add_metadata({})
 
@@ -258,7 +262,7 @@ elif st.session_state.active_menu == "pdf":
 
 
 # =======================================================
-# 3. MODUL: GABUNG PDF (MERGE WORKSPACE HYBRID)
+# 3. MODUL: GABUNG PDF (MERGE WORKSPACE - SUDAH DIPERBAIKI)
 # =======================================================
 elif st.session_state.active_menu == "merge_pdf":
   uploaded_pdfs = st.file_uploader(
@@ -388,13 +392,20 @@ elif st.session_state.active_menu == "merge_pdf":
             try:
               reader = PdfReader(io.BytesIO(m_bytes))
               compressor = PdfWriter()
+
+              # 1. Masukkan semua halaman dulu ke compressor
               for p in reader.pages:
-                p.compress_content_streams()
                 compressor.add_page(p)
+
+              # 2. Kompresi stream pada writer
+              for p in compressor.pages:
+                p.compress_content_streams()
+
               compressor.add_metadata({})
               comp_buf = io.BytesIO()
               compressor.write(comp_buf)
               st.session_state.compressed_result = comp_buf.getvalue()
+              st.rerun()
             except Exception as e:
               st.error(f"Gagal kompresi: {e}")
 
