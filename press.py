@@ -4,118 +4,59 @@ from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
 
-# Konfigurasi Halaman (Sidebar ditutup agar fokus ke Top Navbar)
+# Konfigurasi Halaman
 st.set_page_config(
     page_title="PROJECT GABUT",
     page_icon="🗜️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
-# --- INJEKSI CSS TAMPILAN NAVBAR ALA ILOVEPDF ---
-st.markdown(
-    """
-<style>
-  /* Kurangi padding default atas Streamlit */
-  .block-container {
-    padding-top: 1.5rem !important;
-    padding-bottom: 3rem !important;
-    max-width: 1100px;
-  }
-
-  /* Sembunyikan sidebar toggle bawaan jika ada */
-  [data-testid="collapsedControl"] {
-    display: none;
-  }
-
-  /* Hilangkan bulatan radio button agar jadi tombol teks navbar murni */
-  div[role="radiogroup"] label > div:first-child {
-    display: none !important;
-  }
-
-  /* Desain item navigasi */
-  div[role="radiogroup"] {
-    display: flex !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
-    gap: 20px !important;
-  }
-
-  div[role="radiogroup"] label {
-    background: transparent !important;
-    border: none !important;
-    padding: 8px 12px !important;
-    font-weight: 700 !important;
-    font-size: 14px !important;
-    letter-spacing: 0.5px !important;
-    text-transform: uppercase !important;
-    cursor: pointer !important;
-    transition: color 0.2s ease-in-out;
-  }
-
-  /* Efek Hover warna merah ala iLovePDF */
-  div[role="radiogroup"] label:hover {
-    color: #e5322d !important;
-  }
-
-  /* Garis pemisah navbar */
-  .nav-divider {
-    border-bottom: 2px solid rgba(128, 128, 128, 0.2);
-    margin-bottom: 30px;
-  }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# --- TOP NAVBAR HEADER ---
-col_logo, col_menu = st.columns([1.2, 2.8], vertical_alignment="center")
-
-with col_logo:
+# --- SIDEBAR BRANDING & NAVIGASI ---
+with st.sidebar:
   # Logo Brand ala iLovePDF
   st.markdown(
       """
-    <div style="display: flex; align-items: center; gap: 4px; user-select: none;">
+    <div style="margin-bottom: 20px;">
       <span style="font-size: 26px; font-weight: 900; letter-spacing: -0.5px;">PROJECT</span>
       <span style="font-size: 24px; color: #e5322d; margin: 0 2px;">❤️</span>
       <span style="font-size: 26px; font-weight: 900; letter-spacing: -0.5px;">GABUT</span>
+      <p style="color: gray; font-size: 12px; margin-top: 2px;">Multi-Format Compression Tools</p>
     </div>
     """,
       unsafe_allow_html=True,
   )
 
-with col_menu:
   menu = st.radio(
-      "Navigasi",
-      ["KOMPRES GAMBAR", "KOMPRES PDF", "KOMPRES WORD"],
-      horizontal=True,
-      label_visibility="collapsed",
+      "PILIH TOOLS:",
+      [
+          "🖼️ Kompres Gambar",
+          "📄 Kompres PDF",
+          "📝 Kompres Dokumen Word",
+      ],
   )
 
-# Garis batas bawah navbar
-st.markdown('<div class="nav-divider"></div>', unsafe_allow_html=True)
+  st.divider()
+  st.markdown(
+      "🔒 **100% Aman & Privat**<br>"
+      "<small style='color: gray;'>Semua berkas diproses langsung di RAM tanpa disimpan ke harddisk server.</small>",
+      unsafe_allow_html=True,
+  )
 
 
 # =======================================================
-# 1. HALAMAN: KOMPRES GAMBAR
+# 1. MENU: KOMPRES GAMBAR
 # =======================================================
-if menu == "KOMPRES GAMBAR":
-  st.markdown(
-      "<h2 style='text-align: center; margin-bottom: 5px;'>Kompres Gambar"
-      " Instan</h2>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<p style='text-align: center; color: gray; margin-bottom: 25px;'>Kecilkan"
-      " ukuran file JPG, PNG, atau WEBP tanpa penurunan kualitas yang"
-      " drastis.</p>",
-      unsafe_allow_html=True,
+if menu == "🖼️ Kompres Gambar":
+  st.title("🖼️ Kompres Gambar")
+  st.caption(
+      "Kecilkan ukuran file JPG, PNG, atau WEBP dengan pratinjau langsung."
   )
 
   uploaded_image = st.file_uploader(
-      "Pilih Berkas Gambar",
+      "Unggah Gambar",
       type=["jpg", "jpeg", "png", "webp"],
-      label_visibility="collapsed",
+      key="img_uploader",
   )
 
   if uploaded_image:
@@ -124,14 +65,14 @@ if menu == "KOMPRES GAMBAR":
 
     st.write("---")
     quality = st.slider(
-        "Tingkat Kualitas Gambar (Quality):",
+        "Tingkat Kualitas Kompresi (Quality):",
         min_value=5,
         max_value=100,
         value=50,
-        help="Semakin kecil nilai, semakin kecil ukuran file hasil kompresi.",
+        help="Semakin kecil nilai slider, semakin kecil ukuran file akhirnya.",
     )
 
-    # Proses kompresi di RAM
+    # Proses kompresi gambar di RAM
     img = Image.open(uploaded_image)
     if img.mode in ("RGBA", "P"):
       img = img.convert("RGB")
@@ -146,45 +87,41 @@ if menu == "KOMPRES GAMBAR":
         else 0
     )
 
+    # Preview Komparasi 2 Kolom
     col1, col2 = st.columns(2)
     with col1:
       st.subheader("Gambar Asli")
-      st.caption(f"Ukuran: **{orig_kb} KB**")
+      st.info(f"Ukuran: **{orig_kb} KB**")
       st.image(uploaded_image, use_container_width=True)
 
     with col2:
       st.subheader("Hasil Kompresi")
-      st.caption(f"Ukuran: **{comp_kb} KB** (Hemat **{max(0, savings)}%**)")
+      st.success(f"Ukuran: **{comp_kb} KB** (Hemat **{max(0, savings)}%**)")
       buffer_img.seek(0)
       st.image(buffer_img, use_container_width=True)
 
       st.download_button(
-          label="⬇️ Unduh Gambar",
+          label="⬇️ Unduh Gambar Hasil Kompresi",
           data=buffer_img.getvalue(),
           file_name=f"compressed_q{quality}.jpg",
           mime="image/jpeg",
-          use_container_width=True,
           type="primary",
+          use_container_width=True,
       )
 
 
 # =======================================================
-# 2. HALAMAN: KOMPRES PDF
+# 2. MENU: KOMPRES PDF
 # =======================================================
-elif menu == "KOMPRES PDF":
-  st.markdown(
-      "<h2 style='text-align: center; margin-bottom: 5px;'>Kompres Berkas"
-      " PDF</h2>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<p style='text-align: center; color: gray; margin-bottom: 25px;'>Optimasi"
-      " aliran teks dan buang metadata sampah dari PDF.</p>",
-      unsafe_allow_html=True,
+elif menu == "📄 Kompres PDF":
+  st.title("📄 Kompres Berkas PDF")
+  st.caption(
+      "Optimalkan aliran teks, bersihkan metadata berlebih, dan ringkas"
+      " struktur internal PDF."
   )
 
   uploaded_pdf = st.file_uploader(
-      "Pilih Berkas PDF", type=["pdf"], label_visibility="collapsed"
+      "Unggah Berkas PDF", type=["pdf"], key="pdf_uploader"
   )
 
   if uploaded_pdf:
@@ -193,8 +130,10 @@ elif menu == "KOMPRES PDF":
 
     st.info(f"📁 Berkas: **{uploaded_pdf.name}** | Ukuran Asli: **{orig_kb} KB**")
 
-    if st.button("Mulai Kompresi PDF", type="primary", use_container_width=True):
-      with st.spinner("Sedang memadatkan dokumen PDF..."):
+    if st.button(
+        "⚡ Mulai Kompresi PDF", type="primary", use_container_width=True
+    ):
+      with st.spinner("Sedang memproses dokumen PDF..."):
         try:
           reader = PdfReader(uploaded_pdf)
           writer = PdfWriter()
@@ -232,22 +171,17 @@ elif menu == "KOMPRES PDF":
 
 
 # =======================================================
-# 3. HALAMAN: KOMPRES WORD
+# 3. MENU: KOMPRES DOKUMEN WORD (.DOCX)
 # =======================================================
-elif menu == "KOMPRES WORD":
-  st.markdown(
-      "<h2 style='text-align: center; margin-bottom: 5px;'>Kompres Dokumen Word"
-      " (.docx)</h2>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<p style='text-align: center; color: gray; margin-bottom: 25px;'>Optimasi"
-      " dan perkecil seluruh gambar yang tertanam di dalam dokumen Word.</p>",
-      unsafe_allow_html=True,
+elif menu == "📝 Kompres Dokumen Word":
+  st.title("📝 Kompres Dokumen Word (.docx)")
+  st.caption(
+      "Mengekstrak file Word, mengompresi gambar internal yang bikin ukuran"
+      " dokumen bengkak, lalu mengemasnya kembali."
   )
 
   uploaded_docx = st.file_uploader(
-      "Pilih Berkas DOCX", type=["docx"], label_visibility="collapsed"
+      "Unggah Berkas Word (.docx)", type=["docx"], key="docx_uploader"
   )
 
   if uploaded_docx:
@@ -259,17 +193,17 @@ elif menu == "KOMPRES WORD":
     )
 
     img_quality = st.slider(
-        "Tingkat Kualitas Gambar di Dalam Dokumen:",
+        "Kualitas Gambar di Dalam Dokumen Word:",
         min_value=10,
         max_value=90,
         value=50,
-        help="Gambar di dalam dokumen Word akan di-recompress ke kualitas ini.",
+        help="Gambar/foto di dalam Word akan dikompresi ke kualitas ini.",
     )
 
     if st.button(
-        "Mulai Kompresi Word", type="primary", use_container_width=True
+        "⚡ Mulai Kompresi Word", type="primary", use_container_width=True
     ):
-      with st.spinner("Mengekstrak dan mengompresi gambar internal..."):
+      with st.spinner("Sedang mengoptimasi isi dokumen..."):
         try:
           in_zip = zipfile.ZipFile(uploaded_docx)
           buffer_docx = io.BytesIO()
@@ -282,6 +216,7 @@ elif menu == "KOMPRES WORD":
           for item in in_zip.infolist():
             content = in_zip.read(item.filename)
 
+            # Jika target adalah gambar di dalam Word
             if item.filename.startswith("word/media/"):
               try:
                 img = Image.open(io.BytesIO(content))
@@ -317,13 +252,13 @@ elif menu == "KOMPRES WORD":
           )
 
           st.success(
-              f"🎉 Berhasil! Sebanyak {img_count} gambar dioptimasi. Ukuran:"
-              f" **{orig_kb} KB** ➔ **{comp_kb} KB** (Hemat"
-              f" **{max(0, savings)}%**)"
+              f"🎉 Berhasil! Sebanyak {img_count} gambar di dalam dokumen"
+              f" dioptimalkan. Ukuran: **{orig_kb} KB** ➔ **{comp_kb} KB**"
+              f" (Hemat **{max(0, savings)}%**)"
           )
 
           st.download_button(
-              label="⬇️ Unduh File Word Terkompresi",
+              label="⬇️ Unduh Word (.docx) Terkompresi",
               data=buffer_docx.getvalue(),
               file_name=f"compressed_{uploaded_docx.name}",
               mime=(
@@ -332,4 +267,4 @@ elif menu == "KOMPRES WORD":
               use_container_width=True,
           )
         except Exception as e:
-          st.error(f"Gagal memproses file Word: {e}")
+          st.error(f"Gagal memproses dokumen Word: {e}")
