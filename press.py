@@ -6,7 +6,7 @@ from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
 
-Fungsi mengubah gambar lokal ke format Base64
+#Fungsi mengubah gambar lokal ke format Base64
 def get_image_base64(path):
   if os.path.exists(path):
     with open(path, "rb") as img_file:
