@@ -6,7 +6,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="PROJECT GABUT",
-    page_icon="🗜️",
+    page_icon="face.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
