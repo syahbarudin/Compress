@@ -1,9 +1,20 @@
 import io
+import os
+import base64
 import zipfile
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
 
+Fungsi mengubah gambar lokal ke format Base64
+def get_image_base64(path):
+  if os.path.exists(path):
+    with open(path, "rb") as img_file:
+      return base64.b64encode(img_file.read()).decode("utf-8")
+  return None
+
+# Muat file face.png
+face_base64 = get_image_base64("face.png")
 st.set_page_config(
     page_title="PROJECT GABUT",
     page_icon="face.png",
@@ -17,12 +28,22 @@ if "active_menu" not in st.session_state:
 
 # --- SIDEBAR BRANDING & MENU TOMBOL (BEBAS BULETAN) ---
 with st.sidebar:
+  # Tampilkan gambar di tengah teks jika file ditemukan, atau emotikon cadangan jika belum ada
+  icon_html = (
+      f'<img src="data:image/png;base64,{face_base64}" style="width: 28px;'
+      ' height: 28px; object-fit: contain; vertical-align: middle;">'
+      if face_base64
+      else '<span style="font-size: 22px; color: #e5322d;">❤️</span>'
+  )
+
   st.markdown(
-      """
+      f"""
     <div style="margin-bottom: 20px;">
-      <span style="font-size: 26px; font-weight: 900; letter-spacing: -0.5px;">PROJECT</span>
-      <span style="font-size: 24px; color: #e5322d; margin: 0 2px;">"face.png"</span>
-      <span style="font-size: 26px; font-weight: 900; letter-spacing: -0.5px;">GABUT</span>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">
+        <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">PROJECT</span>
+        {icon_html}
+        <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">GABUT</span>
+      </div>
       <p style="color: gray; font-size: 12px; margin-top: 2px;">Multi-Format Compression Tools</p>
     </div>
     """,
