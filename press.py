@@ -1,8 +1,3 @@
-Ini kode lengkap **`PROJECT GABUT`** yang sudah diperbarui. Sekarang semua nama berkas hasil olahan otomatis mengambil nama berkas asli ditambah nama kegiatannya (misalnya `ktp_compress.jpg`, `cv_merge.pdf`, `dokumen_pdf2word.docx`, dll).
-
-Khusus untuk fitur **Merge PDF** dan **Gambar ke PDF**, nama berkas hasilnya otomatis mengambil nama dari **berkas pertama** yang diunggah/diurutkan.
-
-```python
 import base64
 import io
 import os
@@ -685,5 +680,3 @@ elif st.session_state.active_menu == "img2pdf":
             )
         except Exception as e:
           st.error(f"Gagal mengonversi gambar ke PDF: {e}")
-
-```
