@@ -43,12 +43,11 @@ def get_pdf_first_page_thumb(file_bytes):
 
 def fit_image_to_a4(img, padding=60):
   """Mensejajarkan gambar ke kanvas A4 (Portrait/Landscape Dinamis) di tengah-tengah."""
-  # 1. Koreksi rotasi otomatis sesuai sensor HP (EXIF)
   img = ImageOps.exif_transpose(img)
   if img.mode != "RGB":
     img = img.convert("RGB")
 
-  # 2. Tentukan orientasi A4 secara dinamis berdasarkan dimensi gambar (~150 DPI)
+  # Dimensi A4 pada 150 DPI
   if img.width > img.height:
     # Landscape (misal: KTP, SIM, Sertifikat)
     a4_w, a4_h = 1754, 1240
@@ -58,15 +57,12 @@ def fit_image_to_a4(img, padding=60):
 
   canvas = Image.new("RGB", (a4_w, a4_h), (255, 255, 255))
 
-  # 3. Area maksimal gambar setelah dikurangi margin/padding
   max_w = a4_w - (padding * 2)
   max_h = a4_h - (padding * 2)
 
-  # 4. Resize proporsional
   img_copy = img.copy()
   img_copy.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
 
-  # 5. Posisikan persis di tengah kertas A4
   pos_x = (a4_w - img_copy.width) // 2
   pos_y = (a4_h - img_copy.height) // 2
 
@@ -159,6 +155,7 @@ def compress_image_pdf_engine(pdf_bytes, quality=40, scale=1.2):
       format="PDF",
       save_all=True,
       append_images=processed_images[1:],
+      resolution=150.0,
   )
   return out_buf.getvalue()
 
@@ -693,7 +690,6 @@ elif st.session_state.active_menu == "img2pdf":
             raw_img = Image.open(img_file)
 
             if fit_mode:
-              # Fit gambar ke kanvas A4 dinamis
               formatted_img = fit_image_to_a4(raw_img)
             else:
               raw_img = ImageOps.exif_transpose(raw_img)
@@ -707,11 +703,13 @@ elif st.session_state.active_menu == "img2pdf":
 
           if img_list:
             buffer_pdf = io.BytesIO()
+            # MENAMBAHKAN RESOLUTION=150.0 AGAR UKURAN KERTAS A4 SAMA PRESISI DI PDF READER
             img_list[0].save(
                 buffer_pdf,
                 format="PDF",
                 save_all=True,
                 append_images=img_list[1:],
+                resolution=150.0,
             )
             pdf_bytes = buffer_pdf.getvalue()
             pdf_kb = round(len(pdf_bytes) / 1024, 2)
