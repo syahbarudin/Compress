@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from PIL import Image
+from PIL import Image, ImageOps
 from pypdf import PdfReader, PdfWriter
 import streamlit as st
 from streamlit_sortables import sort_items
@@ -39,6 +39,33 @@ def get_pdf_first_page_thumb(file_bytes):
   except Exception:
     pass
   return None
+
+
+def fit_image_to_a4(img, padding=60):
+  """Mensejajarkan gambar ke kanvas standar A4 di tengah-tengah agar tidak sebesar titan."""
+  # Ukuran kanvas A4 standar (~150 DPI)
+  a4_w, a4_h = 1240, 1754
+  canvas = Image.new("RGB", (a4_w, a4_h), (255, 255, 255))
+
+  # Koreksi rotasi otomatis sesuai sensor HP (EXIF)
+  img = ImageOps.exif_transpose(img)
+  if img.mode != "RGB":
+    img = img.convert("RGB")
+
+  # Area maksimal gambar setelah dikurangi margin/padding
+  max_w = a4_w - (padding * 2)
+  max_h = a4_h - (padding * 2)
+
+  # Resize proporsional
+  img_copy = img.copy()
+  img_copy.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+
+  # Posisikan persis di tengah kertas A4
+  pos_x = (a4_w - img_copy.width) // 2
+  pos_y = (a4_h - img_copy.height) // 2
+
+  canvas.paste(img_copy, (pos_x, pos_y))
+  return canvas
 
 
 def compress_pdf_engine(pdf_bytes):
@@ -256,6 +283,7 @@ if st.session_state.active_menu == "gambar":
     )
 
     img = Image.open(uploaded_image)
+    img = ImageOps.exif_transpose(img)
     if img.mode in ("RGBA", "P"):
       img = img.convert("RGB")
 
@@ -498,7 +526,6 @@ elif st.session_state.active_menu == "merge_pdf":
       ):
         m_bytes = st.session_state.merged_result
         m_kb = round(len(m_bytes) / 1024, 2)
-        # Ambil nama dasar dokumen pertama di urutan
         first_pdf_base = os.path.splitext(sorted_names[0])[0]
 
         st.success(f"🎉 Dokumen siap! ({m_kb} KB)")
@@ -577,7 +604,9 @@ elif st.session_state.active_menu == "pdf2word":
 
           with tempfile.TemporaryDirectory() as temp_dir:
             input_pdf_path = os.path.join(temp_dir, uploaded_pdf.name)
-            output_docx_path = os.path.join(temp_dir, f"{base_name}_pdf2word.docx")
+            output_docx_path = os.path.join(
+                temp_dir, f"{base_name}_pdf2word.docx"
+            )
 
             with open(input_pdf_path, "wb") as f:
               f.write(uploaded_pdf.getvalue())
@@ -614,13 +643,13 @@ elif st.session_state.active_menu == "pdf2word":
 
 
 # =======================================================
-# 5. MODUL: UBAH GAMBAR KE PDF (JPG/PNG ➔ .PDF)
+# 5. MODUL: UBAH GAMBAR KE PDF (AUTO-FIT A4 AUTO-CENTER)
 # =======================================================
 elif st.session_state.active_menu == "img2pdf":
   st.title("🖼️➡️📄 Ubah Gambar ke PDF")
   st.caption(
       "Gabungkan satu atau beberapa foto (JPG, PNG, WEBP) menjadi satu berkas PDF"
-      " secara instan."
+      " rapi berukuran A4."
   )
 
   uploaded_images = st.file_uploader(
@@ -643,17 +672,33 @@ elif st.session_state.active_menu == "img2pdf":
           st.image(img_file, caption=img_file.name, use_container_width=True)
 
     st.write("---")
+    fit_mode = st.checkbox(
+        "Paskan gambar ke ukuran kertas A4 (Rekomendasi agar sejajar saat"
+        " merge)",
+        value=True,
+    )
+
     if st.button(
         "⚡ Konversi ke PDF Sekarang", type="primary", use_container_width=True
     ):
-      with st.spinner("Sedang menggabungkan berkas gambar ke PDF..."):
+      with st.spinner("Sedang merapikan dan menggabungkan gambar ke PDF A4..."):
         try:
           img_list = []
           for img_file in uploaded_images:
-            img = Image.open(img_file)
-            if img.mode != "RGB":
-              img = img.convert("RGB")
-            img_list.append(img)
+            raw_img = Image.open(img_file)
+
+            if fit_mode:
+              # Fit gambar ke kanvas A4 agar sejajar dengan dokumen lain
+              formatted_img = fit_image_to_a4(raw_img)
+            else:
+              raw_img = ImageOps.exif_transpose(raw_img)
+              formatted_img = (
+                  raw_img.convert("RGB")
+                  if raw_img.mode != "RGB"
+                  else raw_img
+              )
+
+            img_list.append(formatted_img)
 
           if img_list:
             buffer_pdf = io.BytesIO()
@@ -667,7 +712,7 @@ elif st.session_state.active_menu == "img2pdf":
             pdf_kb = round(len(pdf_bytes) / 1024, 2)
 
             st.success(
-                f"🎉 Berhasil diubah ke PDF! Ukuran berkas: **{pdf_kb} KB**"
+                f"🎉 Berhasil diubah ke PDF A4! Ukuran berkas: **{pdf_kb} KB**"
             )
 
             st.download_button(
