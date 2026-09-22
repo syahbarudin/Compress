@@ -43,12 +43,10 @@ def get_pdf_first_page_thumb(file_bytes):
 
 def process_image_for_pdf(img, max_dim=1754):
   """Mengkoreksi rotasi EXIF dan meresize gambar proporsional tanpa kanvas/border putih."""
-  # 1. Koreksi rotasi otomatis dari sensor HP (EXIF)
   img = ImageOps.exif_transpose(img)
   if img.mode != "RGB":
     img = img.convert("RGB")
 
-  # 2. Resize proporsional jika gambar terlalu besar (mencegah ukuran titan di PDF)
   w, h = img.size
   if max(w, h) > max_dim:
     img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
@@ -203,6 +201,15 @@ with st.sidebar:
       type="primary" if is_merge else "secondary",
   ):
     st.session_state.active_menu = "merge_pdf"
+    st.rerun()
+
+  is_word2pdf = st.session_state.active_menu == "word2pdf"
+  if st.button(
+      "📑➔📄  Word ke PDF",
+      use_container_width=True,
+      type="primary" if is_word2pdf else "secondary",
+  ):
+    st.session_state.active_menu = "word2pdf"
     st.rerun()
 
   is_pdf2word = st.session_state.active_menu == "pdf2word"
@@ -562,7 +569,110 @@ elif st.session_state.active_menu == "merge_pdf":
 
 
 # =======================================================
-# 4. MODUL: UBAH PDF KE WORD (.PDF ➔ .DOCX)
+# 4. MODUL: UBAH WORD KE PDF (.DOCX ➔ .PDF)
+# =======================================================
+elif st.session_state.active_menu == "word2pdf":
+  st.title("📑➔📄 Ubah Dokumen Word ke PDF")
+  st.caption(
+      "Konversi dokumen Microsoft Word (.docx) menjadi berkas PDF secara"
+      " presisi."
+  )
+
+  uploaded_docx = st.file_uploader(
+      "Unggah Berkas Word (.docx)", type=["docx"], key="word2pdf_uploader"
+  )
+
+  if uploaded_docx:
+    orig_bytes = uploaded_docx.size
+    orig_kb = round(orig_bytes / 1024, 2)
+    base_name = os.path.splitext(uploaded_docx.name)[0]
+
+    st.info(f"📁 Dokumen: **{uploaded_docx.name}** | Ukuran: **{orig_kb} KB**")
+
+    if st.button(
+        "⚡ Konversi ke PDF Sekarang", type="primary", use_container_width=True
+    ):
+      with st.spinner("Sedang mengonversi format dokumen ke PDF..."):
+        try:
+          with tempfile.TemporaryDirectory() as temp_dir:
+            input_docx_path = os.path.join(temp_dir, uploaded_docx.name)
+            output_pdf_path = os.path.join(temp_dir, f"{base_name}.pdf")
+
+            with open(input_docx_path, "wb") as f:
+              f.write(uploaded_docx.getvalue())
+
+            pdf_bytes = None
+
+            # Cek LibreOffice di Linux/Streamlit Cloud & Windows
+            libre_cmd = None
+            for cmd in ["libreoffice", "soffice"]:
+              if shutil.which(cmd):
+                libre_cmd = cmd
+                break
+
+            if libre_cmd:
+              subprocess.run(
+                  [
+                      libre_cmd,
+                      "--headless",
+                      "--convert-to",
+                      "pdf",
+                      input_docx_path,
+                      "--outdir",
+                      temp_dir,
+                  ],
+                  check=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+              )
+              if os.path.exists(output_pdf_path):
+                with open(output_pdf_path, "rb") as f:
+                  pdf_bytes = f.read()
+
+            # Fallback untuk Windows lokal jika ada MS Word & docx2pdf
+            elif sys.platform == "win32":
+              try:
+                import pythoncom
+                from docx2pdf import convert
+
+                pythoncom.CoInitialize()
+                convert(input_docx_path, output_pdf_path)
+                if os.path.exists(output_pdf_path):
+                  with open(output_pdf_path, "rb") as f:
+                    pdf_bytes = f.read()
+              except ImportError:
+                st.error(
+                    "Di Windows lokal butuh dependensi: `pip install docx2pdf"
+                    " pywin32` atau pastikan LibreOffice terdaftar di PATH."
+                )
+
+            if pdf_bytes:
+              pdf_kb = round(len(pdf_bytes) / 1024, 2)
+              st.success(
+                  f"🎉 Berhasil diubah ke PDF! Ukuran berkas:"
+                  f" **{pdf_kb} KB**"
+              )
+
+              st.download_button(
+                  label="⬇️ Unduh Berkas PDF",
+                  data=pdf_bytes,
+                  file_name=f"{base_name}_word2pdf.pdf",
+                  mime="application/pdf",
+                  type="primary",
+                  use_container_width=True,
+              )
+            else:
+              st.error(
+                  "Engine konversi belum siap. Pastikan LibreOffice sudah"
+                  " terinstall dan terdaftar di PATH."
+              )
+
+        except Exception as e:
+          st.error(f"Gagal melakukan konversi berkas: {e}")
+
+
+# =======================================================
+# 5. MODUL: UBAH PDF KE WORD (.PDF ➔ .DOCX)
 # =======================================================
 elif st.session_state.active_menu == "pdf2word":
   st.title("📄➔📑 Ubah Dokumen PDF ke Word")
@@ -632,7 +742,7 @@ elif st.session_state.active_menu == "pdf2word":
 
 
 # =======================================================
-# 5. MODUL: UBAH GAMBAR KE PDF (FULL IMAGE TANPA BORDER)
+# 6. MODUL: UBAH GAMBAR KE PDF (FULL IMAGE TANPA BORDER)
 # =======================================================
 elif st.session_state.active_menu == "img2pdf":
   st.title("🖼️➡️📄 Ubah Gambar ke PDF")
@@ -714,4 +824,3 @@ elif st.session_state.active_menu == "img2pdf":
             )
         except Exception as e:
           st.error(f"Gagal mengonversi gambar ke PDF: {e}")
-            
