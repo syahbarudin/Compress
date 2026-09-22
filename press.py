@@ -41,33 +41,19 @@ def get_pdf_first_page_thumb(file_bytes):
   return None
 
 
-def fit_image_to_a4(img, padding=60):
-  """Mensejajarkan gambar ke kanvas A4 (Portrait/Landscape Dinamis) di tengah-tengah."""
+def process_image_for_pdf(img, max_dim=1754):
+  """Mengkoreksi rotasi EXIF dan meresize gambar proporsional tanpa kanvas/border putih."""
+  # 1. Koreksi rotasi otomatis dari sensor HP (EXIF)
   img = ImageOps.exif_transpose(img)
   if img.mode != "RGB":
     img = img.convert("RGB")
 
-  # Dimensi A4 pada 150 DPI
-  if img.width > img.height:
-    # Landscape (misal: KTP, SIM, Sertifikat)
-    a4_w, a4_h = 1754, 1240
-  else:
-    # Portrait (misal: SKCK, Ijazah, Surat Resmi)
-    a4_w, a4_h = 1240, 1754
+  # 2. Resize proporsional jika gambar terlalu besar (mencegah ukuran titan di PDF)
+  w, h = img.size
+  if max(w, h) > max_dim:
+    img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
 
-  canvas = Image.new("RGB", (a4_w, a4_h), (255, 255, 255))
-
-  max_w = a4_w - (padding * 2)
-  max_h = a4_h - (padding * 2)
-
-  img_copy = img.copy()
-  img_copy.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-
-  pos_x = (a4_w - img_copy.width) // 2
-  pos_y = (a4_h - img_copy.height) // 2
-
-  canvas.paste(img_copy, (pos_x, pos_y))
-  return canvas
+  return img
 
 
 def compress_pdf_engine(pdf_bytes):
@@ -646,13 +632,13 @@ elif st.session_state.active_menu == "pdf2word":
 
 
 # =======================================================
-# 5. MODUL: UBAH GAMBAR KE PDF (DYNAMICAL A4 AUTO-CENTER)
+# 5. MODUL: UBAH GAMBAR KE PDF (FULL IMAGE TANPA BORDER)
 # =======================================================
 elif st.session_state.active_menu == "img2pdf":
   st.title("🖼️➡️📄 Ubah Gambar ke PDF")
   st.caption(
-      "Gabungkan foto (JPG, PNG, WEBP) menjadi berkas PDF A4 rapi secara dinamis"
-      " (Portrait / Landscape menyesuaikan gambar)."
+      "Gabungkan foto (JPG, PNG, WEBP) menjadi berkas PDF full image tanpa"
+      " border/padding putih."
   )
 
   uploaded_images = st.file_uploader(
@@ -676,21 +662,22 @@ elif st.session_state.active_menu == "img2pdf":
 
     st.write("---")
     fit_mode = st.checkbox(
-        "Paskan gambar ke kanvas A4 dinamis (Portrait/Landscape otomatis)",
+        "Optimalkan skala gambar (Mencegah PDF raksasa & menjaga Full Image"
+        " tanpa border)",
         value=True,
     )
 
     if st.button(
         "⚡ Konversi ke PDF Sekarang", type="primary", use_container_width=True
     ):
-      with st.spinner("Sedang merapikan dan menggabungkan gambar ke PDF A4..."):
+      with st.spinner("Sedang memproses dan mengonversi gambar ke PDF..."):
         try:
           img_list = []
           for img_file in uploaded_images:
             raw_img = Image.open(img_file)
 
             if fit_mode:
-              formatted_img = fit_image_to_a4(raw_img)
+              formatted_img = process_image_for_pdf(raw_img)
             else:
               raw_img = ImageOps.exif_transpose(raw_img)
               formatted_img = (
@@ -703,7 +690,6 @@ elif st.session_state.active_menu == "img2pdf":
 
           if img_list:
             buffer_pdf = io.BytesIO()
-            # MENAMBAHKAN RESOLUTION=150.0 AGAR UKURAN KERTAS A4 SAMA PRESISI DI PDF READER
             img_list[0].save(
                 buffer_pdf,
                 format="PDF",
@@ -715,7 +701,7 @@ elif st.session_state.active_menu == "img2pdf":
             pdf_kb = round(len(pdf_bytes) / 1024, 2)
 
             st.success(
-                f"🎉 Berhasil diubah ke PDF A4! Ukuran berkas: **{pdf_kb} KB**"
+                f"🎉 Berhasil diubah ke PDF! Ukuran berkas: **{pdf_kb} KB**"
             )
 
             st.download_button(
@@ -728,3 +714,4 @@ elif st.session_state.active_menu == "img2pdf":
             )
         except Exception as e:
           st.error(f"Gagal mengonversi gambar ke PDF: {e}")
+            
