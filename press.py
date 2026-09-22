@@ -1,3 +1,8 @@
+Ini kode lengkap **`PROJECT GABUT`** yang sudah diperbarui. Sekarang semua nama berkas hasil olahan otomatis mengambil nama berkas asli ditambah nama kegiatannya (misalnya `ktp_compress.jpg`, `cv_merge.pdf`, `dokumen_pdf2word.docx`, dll).
+
+Khusus untuk fitur **Merge PDF** dan **Gambar ke PDF**, nama berkas hasilnya otomatis mengambil nama dari **berkas pertama** yang diunggah/diurutkan.
+
+```python
 import base64
 import io
 import os
@@ -42,8 +47,7 @@ def get_pdf_first_page_thumb(file_bytes):
 
 
 def compress_pdf_engine(pdf_bytes):
-  """Mesin kompresi cepat tanpa bikin server hang/freeze."""
-  # 1. Jalur Utama: Ghostscript (Cepat & reduksi ukuran optimal)
+  """Mesin kompresi standar untuk PDF berbasis teks/vektor."""
   gs_cmd = None
   for cmd in ["gs", "gswin64c", "gswin32c"]:
     if shutil.which(cmd):
@@ -63,7 +67,7 @@ def compress_pdf_engine(pdf_bytes):
               gs_cmd,
               "-sDEVICE=pdfwrite",
               "-dCompatibilityLevel=1.4",
-              "-dPDFSETTINGS=/ebook",
+              "-dPDFSETTINGS=/screen",
               "-dNOPAUSE",
               "-dQUIET",
               "-dBatch",
@@ -87,7 +91,6 @@ def compress_pdf_engine(pdf_bytes):
       if os.path.exists(out_path):
         os.remove(out_path)
 
-  # 2. Jalur Fallback: Kompresi stream aman tanpa loop berat
   reader = PdfReader(io.BytesIO(pdf_bytes))
   writer = PdfWriter()
 
@@ -101,6 +104,35 @@ def compress_pdf_engine(pdf_bytes):
   comp_buf = io.BytesIO()
   writer.write(comp_buf)
   return comp_buf.getvalue()
+
+
+def compress_image_pdf_engine(pdf_bytes, quality=40, scale=1.2):
+  """Mesin kompresi ekstrem khusus PDF hasil scan/convert gambar."""
+  import pypdfium2 as pdfium
+
+  pdf = pdfium.PdfDocument(pdf_bytes)
+  processed_images = []
+
+  for page in pdf:
+    pil_img = page.render(scale=scale).to_pil()
+    if pil_img.mode != "RGB":
+      pil_img = pil_img.convert("RGB")
+
+    img_buf = io.BytesIO()
+    pil_img.save(img_buf, format="JPEG", quality=quality, optimize=True)
+    processed_images.append(Image.open(img_buf))
+
+  if not processed_images:
+    return pdf_bytes
+
+  out_buf = io.BytesIO()
+  processed_images[0].save(
+      out_buf,
+      format="PDF",
+      save_all=True,
+      append_images=processed_images[1:],
+  )
+  return out_buf.getvalue()
 
 
 # Muat aset branding
@@ -162,7 +194,6 @@ with st.sidebar:
     st.session_state.active_menu = "merge_pdf"
     st.rerun()
 
-  # MODUL MODIFIKASI: PDF KE WORD
   is_pdf2word = st.session_state.active_menu == "pdf2word"
   if st.button(
       "📄➔📑  PDF ke Word",
@@ -189,7 +220,6 @@ with st.sidebar:
       unsafe_allow_html=True,
   )
 
-  # Watermark Creator
   st.markdown(
       """
     <div style="margin-top: 40px; padding-top: 15px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: center;">
@@ -219,6 +249,7 @@ if st.session_state.active_menu == "gambar":
   if uploaded_image:
     orig_bytes = uploaded_image.size
     orig_kb = round(orig_bytes / 1024, 2)
+    base_name = os.path.splitext(uploaded_image.name)[0]
 
     st.write("---")
     quality = st.slider(
@@ -258,7 +289,7 @@ if st.session_state.active_menu == "gambar":
       st.download_button(
           label="⬇️ Unduh Gambar Hasil Kompresi",
           data=buffer_img.getvalue(),
-          file_name=f"compressed_q{quality}.jpg",
+          file_name=f"{base_name}_compress.jpg",
           mime="image/jpeg",
           type="primary",
           use_container_width=True,
@@ -271,7 +302,8 @@ if st.session_state.active_menu == "gambar":
 elif st.session_state.active_menu == "pdf":
   st.title("📄 Kompres Berkas PDF")
   st.caption(
-      "Optimalkan aliran teks, bersihkan metadata, dan padatkan berkas PDF."
+      "Optimalkan aliran teks atau pangkas ukuran PDF hasil scan/convert"
+      " gambar."
   )
 
   uploaded_pdf = st.file_uploader(
@@ -281,15 +313,66 @@ elif st.session_state.active_menu == "pdf":
   if uploaded_pdf:
     orig_bytes = uploaded_pdf.size
     orig_kb = round(orig_bytes / 1024, 2)
+    base_name = os.path.splitext(uploaded_pdf.name)[0]
 
     st.info(f"📁 Berkas: **{uploaded_pdf.name}** | Ukuran Asli: **{orig_kb} KB**")
+
+    st.write("---")
+    mode_pdf = st.radio(
+        "Pilih Jenis PDF & Metode Kompresi:",
+        [
+            "📄 PDF Dokumen Teks / Campuran (Standar)",
+            "🖼️ PDF Scan / Hasil Convert Gambar (Ekstrem Ala iLovePDF)",
+        ],
+        help=(
+            "Gunakan mode 'Hasil Convert Gambar' jika PDF kamu isinya foto/scan"
+            " agar ukurannya bisa turun drastis."
+        ),
+    )
+
+    quality_pdf = 40
+    scale_pdf = 1.2
+
+    if "Gambar" in mode_pdf:
+      col_p1, col_p2 = st.columns(2)
+      with col_p1:
+        quality_pdf = st.slider(
+            "Kualitas Gambar di PDF:",
+            min_value=10,
+            max_value=80,
+            value=40,
+            help="Semakin kecil nilai, semakin kecil ukuran file PDF-nya.",
+        )
+      with col_p2:
+        dpi_choice = st.selectbox(
+            "Tingkat Kejelasan / Ketajaman:",
+            [
+                "Sedang / Hemat Ukuran (DPI ~100)",
+                "Tinggi / Cukup Jelas (DPI ~135)",
+                "Sangat Tinggi (DPI ~180)",
+            ],
+        )
+        if "Sedang" in dpi_choice:
+          scale_pdf = 1.2
+        elif "Tinggi" in dpi_choice:
+          scale_pdf = 1.5
+        else:
+          scale_pdf = 2.0
 
     if st.button(
         "⚡ Mulai Kompresi PDF", type="primary", use_container_width=True
     ):
       with st.spinner("Sedang memproses dan mengompresi dokumen PDF..."):
         try:
-          comp_bytes = compress_pdf_engine(uploaded_pdf.getvalue())
+          if "Gambar" in mode_pdf:
+            comp_bytes = compress_image_pdf_engine(
+                uploaded_pdf.getvalue(),
+                quality=quality_pdf,
+                scale=scale_pdf,
+            )
+          else:
+            comp_bytes = compress_pdf_engine(uploaded_pdf.getvalue())
+
           comp_kb = round(len(comp_bytes) / 1024, 2)
           savings = (
               round((1 - (len(comp_bytes) / orig_bytes)) * 100, 1)
@@ -305,8 +388,9 @@ elif st.session_state.active_menu == "pdf":
           st.download_button(
               label="⬇️ Unduh PDF Hasil Kompresi",
               data=comp_bytes,
-              file_name=f"compressed_{uploaded_pdf.name}",
+              file_name=f"{base_name}_compress.pdf",
               mime="application/pdf",
+              type="primary",
               use_container_width=True,
           )
         except Exception as e:
@@ -349,13 +433,11 @@ elif st.session_state.active_menu == "merge_pdf":
           " urutan halaman dokumen:"
       )
 
-      # Ruang kerja drag-and-drop horizontal
       sorted_names = sort_items(file_names, direction="horizontal")
 
       st.write("")
       st.caption("Pratinjau Hasil Urutan Halaman:")
 
-      # Tampilan visual kartu A4 mengikuti hasil drag & drop
       num_cols = min(len(sorted_names), 4)
       cols = st.columns(num_cols)
 
@@ -415,20 +497,21 @@ elif st.session_state.active_menu == "merge_pdf":
             except Exception as e:
               st.error(f"Gagal menggabungkan: {e}")
 
-      # Pilihan Download atau Kompres
       if (
           "merged_result" in st.session_state
           and st.session_state.merged_result
       ):
         m_bytes = st.session_state.merged_result
         m_kb = round(len(m_bytes) / 1024, 2)
+        # Ambil nama dasar dokumen pertama di urutan
+        first_pdf_base = os.path.splitext(sorted_names[0])[0]
 
         st.success(f"🎉 Dokumen siap! ({m_kb} KB)")
 
         st.download_button(
             label=f"⬇️ Unduh PDF ({m_kb} KB)",
             data=m_bytes,
-            file_name="merged_document.pdf",
+            file_name=f"{first_pdf_base}_merge.pdf",
             mime="application/pdf",
             type="primary",
             use_container_width=True,
@@ -438,7 +521,9 @@ elif st.session_state.active_menu == "merge_pdf":
         if st.button("🗜️ Kompres Hasil Ini", use_container_width=True):
           with st.spinner("Mengompresi dan merampingkan dokumen gabungan..."):
             try:
-              st.session_state.compressed_result = compress_pdf_engine(m_bytes)
+              st.session_state.compressed_result = compress_image_pdf_engine(
+                  m_bytes, quality=40, scale=1.2
+              )
               st.rerun()
             except Exception as e:
               st.error(f"Gagal kompresi: {e}")
@@ -459,14 +544,14 @@ elif st.session_state.active_menu == "merge_pdf":
           st.download_button(
               label=f"⬇️ Unduh PDF Terkompresi ({c_kb} KB)",
               data=c_bytes,
-              file_name="merged_compressed.pdf",
+              file_name=f"{first_pdf_base}_merge_compress.pdf",
               mime="application/pdf",
               use_container_width=True,
           )
 
 
 # =======================================================
-# 4. MODUL MODIFIKASI: UBAH PDF KE WORD (.PDF ➔ .DOCX)
+# 4. MODUL: UBAH PDF KE WORD (.PDF ➔ .DOCX)
 # =======================================================
 elif st.session_state.active_menu == "pdf2word":
   st.title("📄➔📑 Ubah Dokumen PDF ke Word")
@@ -482,6 +567,7 @@ elif st.session_state.active_menu == "pdf2word":
   if uploaded_pdf:
     orig_bytes = uploaded_pdf.size
     orig_kb = round(orig_bytes / 1024, 2)
+    base_name = os.path.splitext(uploaded_pdf.name)[0]
 
     st.info(f"📁 Dokumen: **{uploaded_pdf.name}** | Ukuran: **{orig_kb} KB**")
 
@@ -496,13 +582,11 @@ elif st.session_state.active_menu == "pdf2word":
 
           with tempfile.TemporaryDirectory() as temp_dir:
             input_pdf_path = os.path.join(temp_dir, uploaded_pdf.name)
-            base_name = os.path.splitext(uploaded_pdf.name)[0]
-            output_docx_path = os.path.join(temp_dir, f"{base_name}.docx")
+            output_docx_path = os.path.join(temp_dir, f"{base_name}_pdf2word.docx")
 
             with open(input_pdf_path, "wb") as f:
               f.write(uploaded_pdf.getvalue())
 
-            # Konversi PDF ke DOCX menggunakan pdf2docx
             cv = Converter(input_pdf_path)
             cv.convert(output_docx_path, start=0, end=None)
             cv.close()
@@ -520,7 +604,7 @@ elif st.session_state.active_menu == "pdf2word":
               st.download_button(
                   label="⬇️ Unduh Berkas Word (.docx)",
                   data=docx_bytes,
-                  file_name=f"{base_name}.docx",
+                  file_name=f"{base_name}_pdf2word.docx",
                   mime=(
                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   ),
@@ -553,8 +637,8 @@ elif st.session_state.active_menu == "img2pdf":
 
   if uploaded_images:
     st.info(f"📁 Total gambar diunggah: **{len(uploaded_images)} berkas**")
+    first_img_base = os.path.splitext(uploaded_images[0].name)[0]
 
-    # Preview grid dalam beberapa kolom
     num_cols = min(len(uploaded_images), 4)
     cols = st.columns(num_cols)
 
@@ -572,7 +656,6 @@ elif st.session_state.active_menu == "img2pdf":
           img_list = []
           for img_file in uploaded_images:
             img = Image.open(img_file)
-            # Konversi RGBA/P/L ke RGB agar kompatibel murni dengan format PDF
             if img.mode != "RGB":
               img = img.convert("RGB")
             img_list.append(img)
@@ -595,10 +678,12 @@ elif st.session_state.active_menu == "img2pdf":
             st.download_button(
                 label="⬇️ Unduh Berkas PDF",
                 data=pdf_bytes,
-                file_name="converted_images.pdf",
+                file_name=f"{first_img_base}_img2pdf.pdf",
                 mime="application/pdf",
                 type="primary",
                 use_container_width=True,
             )
         except Exception as e:
           st.error(f"Gagal mengonversi gambar ke PDF: {e}")
+
+```
