@@ -171,6 +171,16 @@ with st.sidebar:
     st.session_state.active_menu = "word2pdf"
     st.rerun()
 
+  # MENU BARU: GAMBAR KE PDF
+  is_img2pdf = st.session_state.active_menu == "img2pdf"
+  if st.button(
+      "🖼️➡️📄  Gambar ke PDF",
+      use_container_width=True,
+      type="primary" if is_img2pdf else "secondary",
+  ):
+    st.session_state.active_menu = "img2pdf"
+    st.rerun()
+
   st.divider()
   st.markdown(
       "🔒 **100% Aman & Privat**<br>"
@@ -556,3 +566,73 @@ elif st.session_state.active_menu == "word2pdf":
 
         except Exception as e:
           st.error(f"Gagal melakukan konversi berkas: {e}")
+
+
+# =======================================================
+# 5. MODUL: UBAH GAMBAR KE PDF (JPG/PNG ➔ .PDF)
+# =======================================================
+elif st.session_state.active_menu == "img2pdf":
+  st.title("🖼️➡️📄 Ubah Gambar ke PDF")
+  st.caption(
+      "Gabungkan satu atau beberapa foto (JPG, PNG, WEBP) menjadi satu berkas PDF"
+      " secara instan."
+  )
+
+  uploaded_images = st.file_uploader(
+      "Unggah Berkas Gambar (Bisa pilih banyak sekaligus):",
+      type=["jpg", "jpeg", "png", "webp"],
+      accept_multiple_files=True,
+      key="img2pdf_uploader",
+  )
+
+  if uploaded_images:
+    st.info(f"📁 Total gambar diunggah: **{len(uploaded_images)} berkas**")
+
+    # Preview grid dalam beberapa kolom
+    num_cols = min(len(uploaded_images), 4)
+    cols = st.columns(num_cols)
+
+    for idx, img_file in enumerate(uploaded_images):
+      with cols[idx % num_cols]:
+        with st.container(border=True):
+          st.image(img_file, caption=img_file.name, use_container_width=True)
+
+    st.write("---")
+    if st.button(
+        "⚡ Konversi ke PDF Sekarang", type="primary", use_container_width=True
+    ):
+      with st.spinner("Sedang menggabungkan berkas gambar ke PDF..."):
+        try:
+          img_list = []
+          for img_file in uploaded_images:
+            img = Image.open(img_file)
+            # Konversi RGBA/P/L ke RGB agar kompatibel murni dengan format PDF
+            if img.mode != "RGB":
+              img = img.convert("RGB")
+            img_list.append(img)
+
+          if img_list:
+            buffer_pdf = io.BytesIO()
+            img_list[0].save(
+                buffer_pdf,
+                format="PDF",
+                save_all=True,
+                append_images=img_list[1:],
+            )
+            pdf_bytes = buffer_pdf.getvalue()
+            pdf_kb = round(len(pdf_bytes) / 1024, 2)
+
+            st.success(
+                f"🎉 Berhasil diubah ke PDF! Ukuran berkas: **{pdf_kb} KB**"
+            )
+
+            st.download_button(
+                label="⬇️ Unduh Berkas PDF",
+                data=pdf_bytes,
+                file_name="converted_images.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True,
+            )
+        except Exception as e:
+          st.error(f"Gagal mengonversi gambar ke PDF: {e}")
