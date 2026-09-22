@@ -42,25 +42,31 @@ def get_pdf_first_page_thumb(file_bytes):
 
 
 def fit_image_to_a4(img, padding=60):
-  """Mensejajarkan gambar ke kanvas standar A4 di tengah-tengah agar tidak sebesar titan."""
-  # Ukuran kanvas A4 standar (~150 DPI)
-  a4_w, a4_h = 1240, 1754
-  canvas = Image.new("RGB", (a4_w, a4_h), (255, 255, 255))
-
-  # Koreksi rotasi otomatis sesuai sensor HP (EXIF)
+  """Mensejajarkan gambar ke kanvas A4 (Portrait/Landscape Dinamis) di tengah-tengah."""
+  # 1. Koreksi rotasi otomatis sesuai sensor HP (EXIF)
   img = ImageOps.exif_transpose(img)
   if img.mode != "RGB":
     img = img.convert("RGB")
 
-  # Area maksimal gambar setelah dikurangi margin/padding
+  # 2. Tentukan orientasi A4 secara dinamis berdasarkan dimensi gambar (~150 DPI)
+  if img.width > img.height:
+    # Landscape (misal: KTP, SIM, Sertifikat)
+    a4_w, a4_h = 1754, 1240
+  else:
+    # Portrait (misal: SKCK, Ijazah, Surat Resmi)
+    a4_w, a4_h = 1240, 1754
+
+  canvas = Image.new("RGB", (a4_w, a4_h), (255, 255, 255))
+
+  # 3. Area maksimal gambar setelah dikurangi margin/padding
   max_w = a4_w - (padding * 2)
   max_h = a4_h - (padding * 2)
 
-  # Resize proporsional
+  # 4. Resize proporsional
   img_copy = img.copy()
   img_copy.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
 
-  # Posisikan persis di tengah kertas A4
+  # 5. Posisikan persis di tengah kertas A4
   pos_x = (a4_w - img_copy.width) // 2
   pos_y = (a4_h - img_copy.height) // 2
 
@@ -643,13 +649,13 @@ elif st.session_state.active_menu == "pdf2word":
 
 
 # =======================================================
-# 5. MODUL: UBAH GAMBAR KE PDF (AUTO-FIT A4 AUTO-CENTER)
+# 5. MODUL: UBAH GAMBAR KE PDF (DYNAMICAL A4 AUTO-CENTER)
 # =======================================================
 elif st.session_state.active_menu == "img2pdf":
   st.title("🖼️➡️📄 Ubah Gambar ke PDF")
   st.caption(
-      "Gabungkan satu atau beberapa foto (JPG, PNG, WEBP) menjadi satu berkas PDF"
-      " rapi berukuran A4."
+      "Gabungkan foto (JPG, PNG, WEBP) menjadi berkas PDF A4 rapi secara dinamis"
+      " (Portrait / Landscape menyesuaikan gambar)."
   )
 
   uploaded_images = st.file_uploader(
@@ -673,8 +679,7 @@ elif st.session_state.active_menu == "img2pdf":
 
     st.write("---")
     fit_mode = st.checkbox(
-        "Paskan gambar ke ukuran kertas A4 (Rekomendasi agar sejajar saat"
-        " merge)",
+        "Paskan gambar ke kanvas A4 dinamis (Portrait/Landscape otomatis)",
         value=True,
     )
 
@@ -688,7 +693,7 @@ elif st.session_state.active_menu == "img2pdf":
             raw_img = Image.open(img_file)
 
             if fit_mode:
-              # Fit gambar ke kanvas A4 agar sejajar dengan dokumen lain
+              # Fit gambar ke kanvas A4 dinamis
               formatted_img = fit_image_to_a4(raw_img)
             else:
               raw_img = ImageOps.exif_transpose(raw_img)
