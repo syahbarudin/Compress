@@ -3,3 +3,4 @@ pillow
 pypdf
 pypdfium2
 streamlit-sortables
+pdf2docx
