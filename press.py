@@ -13,7 +13,7 @@ from streamlit_sortables import sort_items
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
     page_title="File Compress",
-    page_icon="face.png" if os.path.exists("face.png") else "🗜️",
+    page_icon="star.png" if os.path.exists("face.png") else "🗜️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
