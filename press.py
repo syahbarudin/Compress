@@ -154,7 +154,7 @@ if "active_menu" not in st.session_state:
 # --- SIDEBAR NAVIGASI & BRANDING ---
 with st.sidebar:
   icon_html = (
-      f'<img src="data:image/png;base64,{face_base64}" style="width: 28px;'
+      f'<img src="data:star.png;base64,{star_base64}" style="width: 28px;'
       ' height: 28px; object-fit: contain; vertical-align: middle;">'
       if face_base64
       else '<span style="font-size: 22px; color: #e5322d;">❤️</span>'
@@ -164,9 +164,9 @@ with st.sidebar:
       f"""
     <div style="margin-bottom: 20px;">
       <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">
-        <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">PROJECT</span>
+        <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">File</span>
         {icon_html}
-        <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">GABUT</span>
+        <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">Compress</span>
       </div>
       <p style="color: gray; font-size: 12px; margin-top: 2px;">Multi-Format Media Tools</p>
     </div>
