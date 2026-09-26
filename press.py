@@ -154,9 +154,9 @@ if "active_menu" not in st.session_state:
 # --- SIDEBAR NAVIGASI & BRANDING ---
 with st.sidebar:
   icon_html = (
-      f'<img src="data:star.png;base64,{star_base64}" style="width: 28px;'
+      f'<img src="data:image/png;base64,{star_base64}" style="width: 28px;'
       ' height: 28px; object-fit: contain; vertical-align: middle;">'
-      if face_base64
+      if star_base64
       else '<span style="font-size: 22px; color: #e5322d;">❤️</span>'
   )
 
