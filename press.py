@@ -144,8 +144,8 @@ def compress_image_pdf_engine(pdf_bytes, quality=40, scale=1.2):
   return out_buf.getvalue()
 
 
-# Muat aset branding
-face_base64 = get_image_base64("face.png")
+# --- FIX PERBAIKAN: DIDEFINISIKAN SEBAGAI star_base64 ---
+star_base64 = get_image_base64("star.png")
 
 # State menu navigasi
 if "active_menu" not in st.session_state:
@@ -154,7 +154,7 @@ if "active_menu" not in st.session_state:
 # --- SIDEBAR NAVIGASI & BRANDING ---
 with st.sidebar:
   icon_html = (
-     f'<img src="data:image/png;base64,{star_base64}" style="width: 28px;'
+      f'<img src="data:image/png;base64,{star_base64}" style="width: 28px;'
       ' height: 28px; object-fit: contain; vertical-align: middle;">'
       if star_base64
       else '<span style="font-size: 22px; color: #f59e0b;">⭐</span>'
